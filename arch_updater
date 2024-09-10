@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# Define color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
+# Print a header
+echo -e "${BOLD}${YELLOW}== System Update Script ==${RESET}"
+
+# Update the package list
+echo -e "${BOLD}${GREEN}Updating package list...${RESET}"
+sudo pacman -Syu --noconfirm
+echo -e "${BOLD}${GREEN}Package list updated.${RESET}"
+
+# Clean up old packages
+echo -e "${BOLD}${YELLOW}Cleaning up old packages...${RESET}"
+sudo pacman -Rns $(pacman -Qdtq) --noconfirm
+echo -e "${BOLD}${GREEN}Old packages cleaned.${RESET}"
+
+# Update the AUR packages (requires yay or paru)
+echo -e "${BOLD}${YELLOW}Updating AUR packages...${RESET}"
+yay -Syu --noconfirm
+echo -e "${BOLD}${GREEN}AUR packages updated.${RESET}"
+
+# Final message
+echo -e "${BOLD}${GREEN}System update complete.${RESET}"
