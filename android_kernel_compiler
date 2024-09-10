@@ -11,10 +11,15 @@ function print_green {
     echo -e "${BOLD_BRIGHT_GREEN}$1${RESET}"
 }
 
+# Function to print error messages
+function print_error {
+    echo -e "\e[1;91m$1\e[0m"  # Bright red color for errors
+}
+
 # Define kernel build settings
 export ARCH="arm64"
 export SUBARCH="$ARCH"
-KERNEL_DIR="/path/to/kernel"
+KERNEL_DIR="/path/to/kernel"  # Replace with actual kernel path
 OUT_DIR="${KERNEL_DIR}/out"
 DEFCONFIG="defconfig"
 
@@ -27,24 +32,25 @@ CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
 export PATH="${CLANG_PATH}:${PATH}"
 
 # Log the build process start
-print_green "Firing up Kernel compilation..."
+print_green "Starting Tequila Kernel compilation..."
 
-# Enter the kernel directory
-if cd "$KERNEL_DIR"; then
+# Check if kernel directory exists and enter it
+if [[ -d "$KERNEL_DIR" ]]; then
+    cd "$KERNEL_DIR" || { print_error "Failed to enter kernel directory: $KERNEL_DIR"; exit 1; }
     print_green "Entered kernel directory: $KERNEL_DIR"
 else
-    echo "Kernel directory not found! Exiting..."
+    print_error "The specified kernel directory \"$KERNEL_DIR\" does not exist. Please check the path."
     exit 1
 fi
 
 # Clean previous builds (optional)
-make mrproper && print_green "Cleaned previous builds." || { echo "Failed to clean builds. Exiting..."; exit 1; }
+make mrproper && print_green "Cleaned previous builds." || { print_error "Failed to clean builds. Exiting..."; exit 1; }
 
 # Load default configuration
 if make O="$OUT_DIR" ARCH="$ARCH" "$DEFCONFIG"; then
     print_green "Loaded defconfig: $DEFCONFIG"
 else
-    echo "Failed to load defconfig. Exiting..."
+    print_error "Failed to load defconfig. Exiting..."
     exit 1
 fi
 
@@ -63,12 +69,12 @@ make -j$(nproc) O="$OUT_DIR" \
 if [ "${PIPESTATUS[0]}" -eq 0 ]; then
     print_green "Kernel compiled successfully!"
 else
-    echo "Kernel compilation failed! Check build.log for details."
+    print_error "Kernel compilation failed! Check build.log for details."
     exit 1
 fi
 
 # Handle interruption gracefully (e.g., Ctrl+C)
-trap 'echo "Aborting..."; rm -rf "$OUT_DIR"; exit 1' SIGINT
+trap 'print_error "Aborting..."; rm -rf "$OUT_DIR"; exit 1' SIGINT
 
 # Final message
 print_green "Tequila Kernel compilation complete!"
