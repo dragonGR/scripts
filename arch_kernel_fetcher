@@ -9,7 +9,7 @@ clear
 
 # Function to print messages in bright green
 function print_green {
-    echo -e "${BOLD_BRIGHT_GREEN}$1${RESET}"
+    echo -e "${BOLD_BRIGHT_GREEN}[$(date +'%Y-%m-%d %H:%M:%S')] $1${RESET}"
 }
 
 # Variables
@@ -49,31 +49,65 @@ download_kernel() {
     
     # Construct the URL based on the latest version
     KERNEL_URL="$KERNEL_BASE_URL/v${MAJOR_VERSION}.x/${LATEST_KERNEL_TARBALL}"
-    wget "$KERNEL_URL" || { echo "Failed to download kernel source from $KERNEL_URL."; exit 1; }
     
-    tar -xf "$LATEST_KERNEL_TARBALL"
+    if ! wget "$KERNEL_URL"; then
+        print_green "Failed to download kernel source from $KERNEL_URL. Exiting."
+        exit 1
+    fi
+    
+    if ! tar -xf "$LATEST_KERNEL_TARBALL"; then
+        print_green "Failed to extract kernel source. Exiting."
+        exit 1
+    fi
+    
     cd linux-"$LATEST_KERNEL_VERSION" || exit
 }
 
 # Function to extract the current kernel configuration
 extract_config() {
     print_green "Extracting current kernel configuration..."
-    zcat /proc/config.gz > .config && print_green "Kernel configuration extracted successfully!" || { echo "Failed to extract kernel configuration."; exit 1; }
+    if ! zcat /proc/config.gz > .config; then
+        print_green "Failed to extract kernel configuration. Exiting."
+        exit 1
+    fi
+    print_green "Kernel configuration extracted successfully!"
 }
 
 # Function to compile the kernel
 compile_kernel() {
     print_green "Compiling the kernel..."
-    make -j$(nproc) && print_green "Kernel compiled successfully!" || { echo "Kernel compilation failed."; exit 1; }
+    if ! make -j$(nproc); then
+        print_green "Kernel compilation failed. Exiting."
+        exit 1
+    fi
+    print_green "Kernel compiled successfully!"
 }
 
 # Function to install the kernel
 install_kernel() {
     print_green "Installing the kernel..."
-    sudo make modules_install
-    sudo make install
+    if ! sudo make modules_install; then
+        print_green "Failed to install kernel modules. Exiting."
+        exit 1
+    fi
+    
+    if ! sudo make install; then
+        print_green "Kernel installation failed. Exiting."
+        exit 1
+    fi
+    
     print_green "Kernel installed successfully! Don't forget to update your bootloader."
 }
+
+# Function to clean up temporary files
+cleanup() {
+    print_green "Cleaning up..."
+    rm -f "$KERNEL_DIR/$LATEST_KERNEL_TARBALL"
+    print_green "Cleanup completed!"
+}
+
+# Handle script interruptions
+trap 'print_green "Aborting..."; cleanup; exit 1;' INT TERM
 
 # Automating the process
 get_latest_kernel_version
@@ -81,6 +115,7 @@ download_kernel
 extract_config
 compile_kernel
 install_kernel
+cleanup
 
 # Final message
 clear
