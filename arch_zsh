@@ -1,0 +1,42 @@
+#!/bin/bash
+
+# Define color variables for bright green and reset
+BOLD_BRIGHT_GREEN="\e[1;92m"
+RESET="\e[0m"
+
+# Clear the terminal
+clear
+
+# Function to print messages in bright green
+function print_green {
+    echo -e "${BOLD_BRIGHT_GREEN}$1${RESET}"
+}
+
+# Check Internet connection
+print_green "Checking Internet connection..."
+if ! ping -c 1 archlinux.org &> /dev/null
+then
+    echo "No Internet connection detected. Exiting."
+    exit 1
+fi
+print_green "Internet connection is active."
+
+# Install Zsh
+print_green "Installing Zsh..."
+sudo pacman -S zsh --noconfirm && print_green "Zsh installed successfully!" || { echo "Failed to install Zsh."; exit 1; }
+
+# Set Zsh as the default shell
+print_green "Setting Zsh as the default shell..."
+chsh -s /bin/zsh && print_green "Zsh is now the default shell!" || { echo "Failed to set Zsh as default shell."; exit 1; }
+
+# Install Oh My Zsh
+print_green "Installing Oh My Zsh..."
+sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" && print_green "Oh My Zsh installed successfully!" || { echo "Failed to install Oh My Zsh."; exit 1; }
+
+# Set the Zsh theme in .zshrc
+print_green "Setting default theme in .zshrc..."
+sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="agnoster"/g' ~/.zshrc && print_green "Theme set to 'agnoster'!" || { echo "Failed to set the theme."; exit 1; }
+
+# Final message
+clear
+print_green "All done! Please restart your terminal."

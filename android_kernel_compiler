@@ -1,0 +1,74 @@
+#!/bin/bash
+
+# Tequila Kernel Build Script with Colored Output
+
+# Define color variables for bright green and reset
+BOLD_BRIGHT_GREEN="\e[1;92m"
+RESET="\e[0m"
+
+# Function to print messages in bright green
+function print_green {
+    echo -e "${BOLD_BRIGHT_GREEN}$1${RESET}"
+}
+
+# Define kernel build settings
+export ARCH="arm64"
+export SUBARCH="$ARCH"
+KERNEL_DIR="/path/to/kernel"
+OUT_DIR="${KERNEL_DIR}/out"
+DEFCONFIG="defconfig"
+
+# Define paths for toolchains
+CLANG_PATH="$HOME/toolchains/neutron-clang/bin"
+CROSS_COMPILE="aarch64-linux-gnu-"
+CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
+
+# Add Neutron Clang toolchain to PATH
+export PATH="${CLANG_PATH}:${PATH}"
+
+# Log the build process start
+print_green "Firing up Kernel compilation..."
+
+# Enter the kernel directory
+if cd "$KERNEL_DIR"; then
+    print_green "Entered kernel directory: $KERNEL_DIR"
+else
+    echo "Kernel directory not found! Exiting..."
+    exit 1
+fi
+
+# Clean previous builds (optional)
+make mrproper && print_green "Cleaned previous builds." || { echo "Failed to clean builds. Exiting..."; exit 1; }
+
+# Load default configuration
+if make O="$OUT_DIR" ARCH="$ARCH" "$DEFCONFIG"; then
+    print_green "Loaded defconfig: $DEFCONFIG"
+else
+    echo "Failed to load defconfig. Exiting..."
+    exit 1
+fi
+
+# Start kernel compilation with Neutron Clang toolchain
+print_green "Starting compilation with Neutron Clang..."
+
+# Pass the necessary variables directly to make as arguments
+make -j$(nproc) O="$OUT_DIR" \
+    ARCH="$ARCH" \
+    CC=clang \
+    CROSS_COMPILE="$CROSS_COMPILE" \
+    CROSS_COMPILE_ARM32="$CROSS_COMPILE_ARM32" \
+    | tee build.log
+
+# Check for build success or failure
+if [ "${PIPESTATUS[0]}" -eq 0 ]; then
+    print_green "Kernel compiled successfully!"
+else
+    echo "Kernel compilation failed! Check build.log for details."
+    exit 1
+fi
+
+# Handle interruption gracefully (e.g., Ctrl+C)
+trap 'echo "Aborting..."; rm -rf "$OUT_DIR"; exit 1' SIGINT
+
+# Final message
+print_green "Tequila Kernel compilation complete!"

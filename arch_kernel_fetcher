@@ -1,0 +1,87 @@
+#!/bin/bash
+
+# Define color variables for bright green and reset
+BOLD_BRIGHT_GREEN="\e[1;92m"
+RESET="\e[0m"
+
+# Clear the terminal
+clear
+
+# Function to print messages in bright green
+function print_green {
+    echo -e "${BOLD_BRIGHT_GREEN}$1${RESET}"
+}
+
+# Variables
+KERNEL_DIR="$HOME/kernel_build"
+KERNEL_BASE_URL="https://cdn.kernel.org/pub/linux/kernel"
+CURRENT_KERNEL_VERSION=$(uname -r | cut -d '-' -f1) # Extract major.minor version
+MAJOR_VERSION=$(echo $CURRENT_KERNEL_VERSION | cut -d '.' -f1) # Major version (e.g., 6)
+MINOR_VERSION=$(echo $CURRENT_KERNEL_VERSION | cut -d '.' -f2) # Minor version (e.g., 10)
+LATEST_KERNEL_VERSION=""
+LATEST_KERNEL_TARBALL=""
+
+# Function to get the latest kernel version from kernel.org
+get_latest_kernel_version() {
+    print_green "Fetching the latest kernel version from cdn.kernel.org..."
+    
+    # Fetch the list of versions
+    VERSION_LIST=$(wget -qO- $KERNEL_BASE_URL/v${MAJOR_VERSION}.x/ | \
+        grep -oP 'linux-\K[0-9]+\.[0-9]+\.[0-9]+' | \
+        sort -V | tail -n 1)
+    
+    if [ -z "$VERSION_LIST" ]; then
+        print_green "Failed to fetch the latest kernel version. Exiting."
+        exit 1
+    fi
+    
+    LATEST_KERNEL_VERSION=$VERSION_LIST
+    LATEST_KERNEL_TARBALL="linux-${LATEST_KERNEL_VERSION}.tar.xz"
+    
+    print_green "Latest kernel version found: $LATEST_KERNEL_VERSION"
+}
+
+# Function to download and extract the kernel source
+download_kernel() {
+    print_green "Downloading Linux Kernel $LATEST_KERNEL_VERSION..."
+    mkdir -p "$KERNEL_DIR"
+    cd "$KERNEL_DIR" || exit
+    
+    # Construct the URL based on the latest version
+    KERNEL_URL="$KERNEL_BASE_URL/v${MAJOR_VERSION}.x/${LATEST_KERNEL_TARBALL}"
+    wget "$KERNEL_URL" || { echo "Failed to download kernel source from $KERNEL_URL."; exit 1; }
+    
+    tar -xf "$LATEST_KERNEL_TARBALL"
+    cd linux-"$LATEST_KERNEL_VERSION" || exit
+}
+
+# Function to extract the current kernel configuration
+extract_config() {
+    print_green "Extracting current kernel configuration..."
+    zcat /proc/config.gz > .config && print_green "Kernel configuration extracted successfully!" || { echo "Failed to extract kernel configuration."; exit 1; }
+}
+
+# Function to compile the kernel
+compile_kernel() {
+    print_green "Compiling the kernel..."
+    make -j$(nproc) && print_green "Kernel compiled successfully!" || { echo "Kernel compilation failed."; exit 1; }
+}
+
+# Function to install the kernel
+install_kernel() {
+    print_green "Installing the kernel..."
+    sudo make modules_install
+    sudo make install
+    print_green "Kernel installed successfully! Don't forget to update your bootloader."
+}
+
+# Automating the process
+get_latest_kernel_version
+download_kernel
+extract_config
+compile_kernel
+install_kernel
+
+# Final message
+clear
+print_green "Kernel build and installation completed!"

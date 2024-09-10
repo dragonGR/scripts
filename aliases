@@ -1,0 +1,52 @@
+#!/bin/bash
+
+# Define color variables for bright green and reset
+BOLD_BRIGHT_GREEN="\e[1;92m"
+RESET="\e[0m"
+
+# Clear the terminal
+clear
+
+# Function to print messages in bright green
+function print_green {
+    echo -e "${BOLD_BRIGHT_GREEN}$1${RESET}"
+}
+
+# Path to .zshrc
+ZSHRC_PATH="$HOME/.zshrc"
+
+# Aliases to add
+ALIASES=(
+    "alias nano='nano -c'"
+    "alias c='clear'"
+    "alias gs='git status'"
+    "alias gl='git log'"
+    "alias glo='gl --oneline'"
+    "alias gc='git clone'"
+    "alias gp='git push'"
+    "alias gpf='gp -f'"
+    "alias gf='git fetch'"
+    "alias grb='git rebase'"
+    "alias grbs='grb --skip'"
+    "alias grba='grb --abort'"
+    "alias gcp='git cherry-pick'"
+    "alias gcps='gcp --skip'"
+    "alias gcpc='gcp --continue'"
+    "alias gcpa='gcp --abort'"
+)
+
+# Function to append aliases to .zshrc
+function add_aliases {
+    echo "# Custom aliases" >> "$ZSHRC_PATH"
+    for alias in "${ALIASES[@]}"; do
+        echo "$alias" >> "$ZSHRC_PATH"
+    done
+    echo "" >> "$ZSHRC_PATH"
+}
+
+# Add aliases to .zshrc
+print_green "Adding custom aliases to .zshrc..."
+add_aliases && print_green "Aliases added successfully!" || { echo "Failed to add aliases."; exit 1; }
+
+# Inform the user to restart zsh
+print_green "Please restart your Zsh session or open a new terminal to apply the changes."
