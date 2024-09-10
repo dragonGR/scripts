@@ -8,8 +8,16 @@ RESET="\e[0m"
 clear
 
 # Function to print messages in bright green
-function print_green {
+print_green() {
     echo -e "${BOLD_BRIGHT_GREEN}$1${RESET}"
+}
+
+# Function to check the success of the previous command
+check_success() {
+    if [[ $? -ne 0 ]]; then
+        echo "Error: $1"
+        exit 1
+    fi
 }
 
 # Start setup
@@ -17,23 +25,32 @@ print_green 'Starting Arch-based Android build setup'
 
 # Ensure essential tools are installed before proceeding
 print_green '[0/4] Checking for essential tools (git, base-devel)...'
-sudo pacman -S --noconfirm --needed git base-devel && print_green "Essential tools installed successfully!" || { echo "Failed to install essential tools."; exit 1; }
+sudo pacman -S --noconfirm --needed git base-devel
+check_success "Failed to install essential tools."
 
 # Uncomment the multilib repo, in case it was commented out
 print_green '[1/4] Enabling multilib repo'
-sudo sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf && print_green "Multilib repo enabled!" || { echo "Failed to enable multilib repo."; exit 1; }
+sudo sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf
+check_success "Failed to enable multilib repo."
 
 # Sync, update, and prepare system
 print_green '[2/4] Syncing repositories and updating system packages'
-sudo pacman -Syyu --noconfirm --needed git git-lfs multilib-devel fontconfig ttf-droid && print_green "System updated and repositories synced!" || { echo "Failed to sync repositories and update system."; exit 1; }
+sudo pacman -Syyu --noconfirm --needed git git-lfs multilib-devel fontconfig ttf-droid
+check_success "Failed to sync repositories and update system."
 
 # Install Android build prerequisites from AUR
 print_green '[3/4] Installing Android build prerequisites'
-packages="ncurses5-compat-libs lib32-ncurses5-compat-libs aosp-devel xml2 lineageos-devel"
-for package in $packages; do
+packages=(
+    "ncurses5-compat-libs"
+    "lib32-ncurses5-compat-libs"
+    "aosp-devel"
+    "xml2"
+    "lineageos-devel"
+)
+for package in "${packages[@]}"; do
     print_green "Installing $package from AUR..."
-    if git clone https://aur.archlinux.org/"$package".git; then
-        cd "$package" || exit
+    if git clone "https://aur.archlinux.org/$package.git"; then
+        cd "$package" || { echo "Failed to enter directory $package"; exit 1; }
         if makepkg -si --skippgpcheck --noconfirm --needed; then
             print_green "$package installed successfully!"
         else
@@ -48,7 +65,8 @@ done
 
 # Install adb and associated udev rules
 print_green '[4/4] Installing adb convenience tools'
-sudo pacman -S --noconfirm --needed android-tools android-udev && print_green "adb and udev rules installed!" || { echo "Failed to install adb and udev tools."; exit 1; }
+sudo pacman -S --noconfirm --needed android-tools android-udev
+check_success "Failed to install adb and udev tools."
 
 # Clear terminal and final message
 clear
