@@ -1,8 +1,10 @@
 #!/bin/bash
 
-# Define color variables for bright green and reset
+# Define color variables for bright green, bold white, and reset
 BOLD_BRIGHT_GREEN="\e[1;92m"
+BOLD_WHITE="\e[1;97m"
 RESET="\e[0m"
+BOLD_RED="\e[1;91m"
 
 # Clear the terminal
 clear
@@ -12,9 +14,19 @@ function print_green {
     echo -e "${BOLD_BRIGHT_GREEN}$1${RESET}"
 }
 
+# Function to print messages in bold white
+function print_white {
+    echo -e "${BOLD_WHITE}$1${RESET}"
+}
+
+# Function to print messages in bold red
+function print_red {
+    echo -e "${BOLD_RED}$1${RESET}"
+}
+
 # Clean the package cache
 print_green "Cleaning the package cache..."
-sudo pacman -Scc --noconfirm && print_green "Package cache cleaned!" || { echo "Failed to clean package cache."; exit 1; }
+sudo pacman -Scc --noconfirm && print_green "Package cache cleaned!" || { print_red "Failed to clean package cache."; exit 1; }
 
 # Remove orphaned packages
 print_green "Removing orphaned packages..."
@@ -22,16 +34,16 @@ ORPHANS=$(pacman -Qdtq)
 if [ -z "$ORPHANS" ]; then
     print_green "No orphaned packages found!"
 else
-    sudo pacman -Rns $ORPHANS --noconfirm && print_green "Orphaned packages removed!" || { echo "Failed to remove orphaned packages."; exit 1; }
+    sudo pacman -Rns $ORPHANS --noconfirm && print_green "Orphaned packages removed!" || { print_red "Failed to remove orphaned packages."; exit 1; }
 fi
 
 # Clear systemd journal logs
 print_green "Clearing systemd journal logs..."
-sudo journalctl --vacuum-size=100M && print_green "Systemd journal logs cleared!" || { echo "Failed to clear journal logs."; exit 1; }
+sudo journalctl --vacuum-size=100M && print_green "Systemd journal logs cleared!" || { print_red "Failed to clear journal logs."; exit 1; }
 
 # Clear user cache
 print_green "Clearing user cache..."
-rm -rf ~/.cache/* && print_green "User cache cleared!" || { echo "Failed to clear user cache."; exit 1; }
+rm -rf ~/.cache/* && print_green "User cache cleared!" || { print_red "Failed to clear user cache."; exit 1; }
 
 # Clear terminal and final message
 clear
