@@ -12,16 +12,38 @@ function print_green {
     echo -e "${BOLD_BRIGHT_GREEN}$1${RESET}"
 }
 
-# Function to install packages
-function install_packages {
-    local packages=$1
-    local type=$2
-    print_green "Installing $type packages..."
-    if sudo pacman --needed -S $packages --noconfirm; then
-        print_green "$type packages installed successfully!"
-    else
-        print_green "Failed to install some $type packages."
-    fi
+# Function to install packages from pacman
+function install_pacman_packages {
+    local packages="$1"
+    print_green "Installing pacman packages..."
+    for package in $packages; do
+        if pacman -Qq | grep -qw $package; then
+            print_green "$package is already installed."
+        else
+            if sudo pacman --needed -S $package --noconfirm; then
+                print_green "$package installed successfully!"
+            else
+                print_green "Failed to install $package."
+            fi
+        fi
+    done
+}
+
+# Function to install packages from AUR using yay
+function install_yay_packages {
+    local packages="$1"
+    print_green "Installing AUR packages..."
+    for package in $packages; do
+        if yay -Qq | grep -qw $package; then
+            print_green "$package is already installed."
+        else
+            if yay -S $package --noconfirm; then
+                print_green "$package installed successfully!"
+            else
+                print_green "Failed to install $package."
+            fi
+        fi
+    done
 }
 
 # Function to set GNOME settings
@@ -47,7 +69,7 @@ else
 fi
 
 # Install basic packages from official repositories
-install_packages "firefox python-pip poetry telegram-desktop meld git git-lfs wget curl base-devel gnupg gcc clang flex bison ttf-fira-code zip curl unzip fontconfig libxcrypt-compat ccache gnome-browser-connector" "basic"
+install_pacman_packages "firefox python-pip poetry telegram-desktop meld git git-lfs wget curl base-devel gnupg gcc clang flex bison ttf-fira-code zip unzip fontconfig libxcrypt-compat ccache gnome-browser-connector"
 
 # Alt+Shift language switcher setup
 set_gnome_setting "org.gnome.desktop.wm.keybindings switch-input-source" "['<Shift>Alt_L']"
@@ -81,12 +103,7 @@ else
 fi
 
 # Install AUR packages using yay
-print_green "Installing AUR packages..."
-if yay -S --noconfirm aosp-devel lineageos-devel spotify-edge ttf-meslo-nerd visual-studio-code-bin; then
-    print_green "AUR packages installed successfully!"
-else
-    print_green "Some AUR packages were already installed or up to date."
-fi
+install_yay_packages "aosp-devel lineageos-devel spotify-edge visual-studio-code-bin"
 
 # Clear terminal and final message
 clear
