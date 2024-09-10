@@ -12,37 +12,68 @@ function print_green {
     echo -e "${BOLD_BRIGHT_GREEN}$1${RESET}"
 }
 
+# Function to install packages
+function install_packages {
+    local packages=$1
+    local type=$2
+    print_green "Installing $type packages..."
+    if sudo pacman --needed -S $packages --noconfirm; then
+        print_green "$type packages installed successfully!"
+    else
+        print_green "Failed to install some $type packages."
+    fi
+}
+
+# Function to set GNOME settings
+function set_gnome_setting {
+    local key=$1
+    local value=$2
+    print_green "Setting GNOME key $key to $value..."
+    if gsettings set $key $value; then
+        print_green "GNOME setting $key updated successfully!"
+    else
+        print_green "Failed to update GNOME setting $key."
+        exit 1
+    fi
+}
+
 # Update the system
 print_green "Updating the system..."
-sudo pacman -Syu --noconfirm && print_green "System updated successfully!" || { echo "System update failed."; exit 1; }
+if sudo pacman -Syu --noconfirm; then
+    print_green "System updated successfully!"
+else
+    print_green "System update failed."
+    exit 1
+fi
 
 # Install basic packages from official repositories
-print_green "Installing basic packages from official repositories..."
-sudo pacman --needed -S firefox python-pip poetry telegram-desktop meld \
-    git git-lfs wget curl base-devel gnupg gcc clang flex bison ttf-fira-code \
-    zip curl unzip fontconfig libxcrypt-compat ccache gnome-browser-connector --noconfirm && print_green "Basic packages installed!" || print_green "Some packages were already installed or up to date."
+install_packages "firefox python-pip poetry telegram-desktop meld git git-lfs wget curl base-devel gnupg gcc clang flex bison ttf-fira-code zip curl unzip fontconfig libxcrypt-compat ccache gnome-browser-connector" "basic"
 
 # Alt+Shift language switcher setup
-print_green "Time to bring the traditional Alt+Shift language switcher for GNOME back..."
-gsettings set org.gnome.desktop.wm.keybindings switch-input-source "['<Shift>Alt_L']" && \
-gsettings set org.gnome.desktop.wm.keybindings switch-input-source-backward "['<Alt>Shift_L']" && \
-print_green "Alt+Shift language switcher set up successfully!" || { echo "Failed to set up language switcher."; exit 1; }
+set_gnome_setting "org.gnome.desktop.wm.keybindings switch-input-source" "['<Shift>Alt_L']"
+set_gnome_setting "org.gnome.desktop.wm.keybindings switch-input-source-backward" "['<Alt>Shift_L']"
 
 # Increase audio volume limit from 100% to 150%
-print_green "Increasing audio volume limit from 100% to 150%..."
-gsettings set org.gnome.desktop.sound allow-volume-above-100-percent 'true' && print_green "Audio volume limit increased successfully!" || { echo "Failed to increase audio volume limit."; exit 1; }
+set_gnome_setting "org.gnome.desktop.sound allow-volume-above-100-percent" 'true'
 
 # Enable nano syntax highlighting
 print_green "Enabling nano syntax highlighting..."
-find /usr/share/nano/ -iname "*.nanorc" -exec echo include {} \; >> ~/.nanorc && print_green "Nano syntax highlighting enabled!" || { echo "Failed to enable nano syntax highlighting."; exit 1; }
+if find /usr/share/nano/ -iname "*.nanorc" -exec echo include {} \; >> ~/.nanorc; then
+    print_green "Nano syntax highlighting enabled!"
+else
+    print_green "Failed to enable nano syntax highlighting."
+fi
 
 # Install 'yay' AUR helper
 print_green "Installing 'yay' AUR helper..."
-if ! command -v yay &> /dev/null
-then
+if ! command -v yay &> /dev/null; then
     sudo pacman --needed -S git base-devel --noconfirm
-    git clone https://aur.archlinux.org/yay.git && cd yay
-    makepkg -si --noconfirm && print_green "Yay installed!" || { echo "Yay installation failed."; exit 1; }
+    if git clone https://aur.archlinux.org/yay.git && cd yay && makepkg -si --noconfirm; then
+        print_green "Yay installed!"
+    else
+        print_green "Yay installation failed."
+        exit 1
+    fi
     cd ..
     rm -rf yay
 else
@@ -51,7 +82,11 @@ fi
 
 # Install AUR packages using yay
 print_green "Installing AUR packages..."
-yay -S --noconfirm aosp-devel lineageos-devel spotify-edge visual-studio-code-bin && print_green "AUR packages installed!" || print_green "Some AUR packages were already installed or up to date."
+if yay -S --noconfirm aosp-devel lineageos-devel spotify-edge ttf-meslo-nerd visual-studio-code-bin; then
+    print_green "AUR packages installed successfully!"
+else
+    print_green "Some AUR packages were already installed or up to date."
+fi
 
 # Clear terminal and final message
 clear
