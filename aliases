@@ -14,39 +14,96 @@ function print_green {
 
 # Path to .zshrc
 ZSHRC_PATH="$HOME/.zshrc"
+BACKUP_PATH="$HOME/.zshrc.bak"
 
-# Aliases to add
+# Final list of aliases and exports
 ALIASES=(
-    "alias nano='nano -c'"
-    "alias c='clear'"
-    "alias gs='git status'"
-    "alias gl='git log'"
-    "alias glo='gl --oneline'"
-    "alias gc='git clone'"
-    "alias gp='git push'"
-    "alias gpf='gp -f'"
     "alias gf='git fetch'"
-    "alias grb='git rebase'"
-    "alias grbs='grb --skip'"
-    "alias grba='grb --abort'"
     "alias gcp='git cherry-pick'"
     "alias gcps='gcp --skip'"
     "alias gcpc='gcp --continue'"
     "alias gcpa='gcp --abort'"
+    "alias gs='git status'"
+    "alias gl='git log'"
+    "alias glo='gl --oneline'"
+    "alias gp='git pull'"
+    "alias grb='git rebase'"
+    "alias gc='git clone'"
+    "alias nano='nano -c'"
+    "alias c='clear'"
+    "alias gpf='gp -f'"
+    "alias grbs='grb --skip'"
+    "alias grba='grb --abort'"
 )
 
-# Function to append aliases to .zshrc
-function add_aliases {
-    echo "# Custom aliases" >> "$ZSHRC_PATH"
+EXPORTS=(
+    "export USE_CCACHE=1"
+    "export CCACHE_EXEC=/usr/bin/ccache"
+)
+
+# Function to backup .zshrc
+function backup_zshrc {
+    if [ -f "$ZSHRC_PATH" ]; then
+        print_green "Backing up existing .zshrc to .zshrc.bak..."
+        cp "$ZSHRC_PATH" "$BACKUP_PATH" || { echo "Failed to backup .zshrc."; exit 1; }
+    fi
+}
+
+# Function to check if an entry already exists
+function entry_exists {
+    local entry=$1
+    grep -Fxq "$entry" "$ZSHRC_PATH"
+}
+
+# Function to add aliases and exports to .zshrc
+function add_entries {
+    # Backup existing .zshrc
+    backup_zshrc
+
+    # Check if all aliases and exports already exist
+    all_exists=true
+
     for alias in "${ALIASES[@]}"; do
-        echo "$alias" >> "$ZSHRC_PATH"
+        if ! entry_exists "$alias"; then
+            all_exists=false
+            break
+        fi
     done
+
+    for export in "${EXPORTS[@]}"; do
+        if ! entry_exists "$export"; then
+            all_exists=false
+            break
+        fi
+    done
+
+    if $all_exists; then
+        print_green "Aliases and exports already appended to .zshrc."
+        return
+    fi
+
+    # Add custom aliases
+    echo "# Personal Aliases" >> "$ZSHRC_PATH"
+    for alias in "${ALIASES[@]}"; do
+        if ! entry_exists "$alias"; then
+            echo "$alias" >> "$ZSHRC_PATH"
+        fi
+    done
+
+    # Add custom exports
+    echo "# Personal exports" >> "$ZSHRC_PATH"
+    for export in "${EXPORTS[@]}"; do
+        if ! entry_exists "$export"; then
+            echo "$export" >> "$ZSHRC_PATH"
+        fi
+    done
+
     echo "" >> "$ZSHRC_PATH"
 }
 
-# Add aliases to .zshrc
-print_green "Adding custom aliases to .zshrc..."
-add_aliases && print_green "Aliases added successfully!" || { echo "Failed to add aliases."; exit 1; }
+# Add aliases and exports to .zshrc
+print_green "Adding custom aliases and exports to .zshrc..."
+add_entries && print_green "Aliases and exports added successfully!" || { echo "Failed to add aliases and exports."; exit 1; }
 
 # Inform the user to restart zsh
 print_green "Please restart your Zsh session or open a new terminal to apply the changes."
