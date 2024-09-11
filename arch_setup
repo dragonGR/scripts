@@ -69,7 +69,7 @@ else
 fi
 
 # Install basic packages from official repositories
-install_pacman_packages "firefox python-pip poetry telegram-desktop meld git git-lfs wget curl base-devel gnupg gcc clang flex bison ttf-fira-code zip unzip fontconfig libxcrypt-compat ccache gnome-browser-connector"
+install_pacman_packages "firefox python-pip poetry telegram-desktop meld git git-lfs wget curl base-devel gnupg gcc clang flex bison ttf-fira-code zip unzip fontconfig libxcrypt-compat ccache gnome-browser-connector dos2unix"
 
 # Alt+Shift language switcher setup
 set_gnome_setting "org.gnome.desktop.wm.keybindings switch-input-source" "['<Shift>Alt_L']"
