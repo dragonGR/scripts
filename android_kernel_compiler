@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Tequila Kernel Build Script with Colored Output
-
 # Define color variables for bright green and reset
 BOLD_BRIGHT_GREEN="\e[1;92m"
 RESET="\e[0m"
@@ -37,41 +35,24 @@ print_green "Starting Tequila Kernel compilation..."
 # Check if kernel directory exists and enter it
 if [[ -d "$KERNEL_DIR" ]]; then
     cd "$KERNEL_DIR" || { print_error "Failed to enter kernel directory: $KERNEL_DIR"; exit 1; }
-    print_green "Entered kernel directory: $KERNEL_DIR"
 else
     print_error "The specified kernel directory \"$KERNEL_DIR\" does not exist. Please check the path."
     exit 1
 fi
 
 # Clean previous builds (optional)
-make mrproper && print_green "Cleaned previous builds." || { print_error "Failed to clean builds. Exiting..."; exit 1; }
+make mrproper || { print_error "Failed to clean previous builds. Exiting..."; exit 1; }
 
 # Load default configuration
-if make O="$OUT_DIR" ARCH="$ARCH" "$DEFCONFIG"; then
-    print_green "Loaded defconfig: $DEFCONFIG"
-else
-    print_error "Failed to load defconfig. Exiting..."
-    exit 1
-fi
+make O="$OUT_DIR" ARCH="$ARCH" "$DEFCONFIG" || { print_error "Failed to load defconfig. Exiting..."; exit 1; }
 
 # Start kernel compilation with Neutron Clang toolchain
 print_green "Starting compilation with Neutron Clang..."
-
-# Pass the necessary variables directly to make as arguments
 make -j$(nproc) O="$OUT_DIR" \
     ARCH="$ARCH" \
     CC=clang \
     CROSS_COMPILE="$CROSS_COMPILE" \
-    CROSS_COMPILE_ARM32="$CROSS_COMPILE_ARM32" \
-    | tee build.log
-
-# Check for build success or failure
-if [ "${PIPESTATUS[0]}" -eq 0 ]; then
-    print_green "Kernel compiled successfully!"
-else
-    print_error "Kernel compilation failed! Check build.log for details."
-    exit 1
-fi
+    CROSS_COMPILE_ARM32="$CROSS_COMPILE_ARM32" || { print_error "Kernel compilation failed!"; exit 1; }
 
 # Handle interruption gracefully (e.g., Ctrl+C)
 trap 'print_error "Aborting..."; rm -rf "$OUT_DIR"; exit 1' SIGINT
