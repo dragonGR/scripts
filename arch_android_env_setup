@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
-# Define color variables for bright green and reset
+# Define color variables for bright green, bright red, and reset
 BOLD_BRIGHT_GREEN="\e[1;92m"
+BOLD_BRIGHT_RED="\e[1;91m"
 RESET="\e[0m"
 
 # Clear the terminal
@@ -12,16 +13,30 @@ print_green() {
     echo -e "${BOLD_BRIGHT_GREEN}$1${RESET}"
 }
 
+# Function to print error messages in bright red
+print_red() {
+    echo -e "${BOLD_BRIGHT_RED}$1${RESET}"
+}
+
 # Function to check the success of the previous command
 check_success() {
     if [[ $? -ne 0 ]]; then
-        echo "Error: $1"
+        print_red "Error: $1"
         exit 1
     fi
 }
 
+# Function to clean up temporary directories
+cleanup() {
+    rm -rf "$TEMP_DIR"
+}
+
 # Start setup
 print_green 'Starting Arch-based Android build setup'
+
+# Create a temporary directory for package builds
+TEMP_DIR=$(mktemp -d)
+trap cleanup EXIT
 
 # Ensure essential tools are installed before proceeding
 print_green '[0/4] Checking for essential tools (git, base-devel)...'
@@ -47,19 +62,23 @@ packages=(
     "xml2"
     "lineageos-devel"
 )
+
 for package in "${packages[@]}"; do
     print_green "Installing $package from AUR..."
-    if git clone "https://aur.archlinux.org/$package.git"; then
-        cd "$package" || { echo "Failed to enter directory $package"; exit 1; }
+
+    # Clone and install package
+    if git clone "https://aur.archlinux.org/$package.git" "$TEMP_DIR/$package"; then
+        pushd "$TEMP_DIR/$package" > /dev/null || { print_red "Failed to enter directory $package"; exit 1; }
+
         if makepkg -si --skippgpcheck --noconfirm --needed; then
             print_green "$package installed successfully!"
         else
-            echo "Error installing $package"
+            print_red "Error installing $package"
         fi
-        cd - || exit
-        rm -rf "$package"
+
+        popd > /dev/null || exit
     else
-        echo "Error cloning $package"
+        print_red "Error cloning $package"
     fi
 done
 
