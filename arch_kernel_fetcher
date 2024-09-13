@@ -64,16 +64,16 @@ download_kernel() {
 
     local kernel_url="$KERNEL_BASE_URL/v${MAJOR_VERSION}.x/${LATEST_KERNEL_TARBALL}"
 
-    if ! wget "$kernel_url"; then
+    # Show progress bar while downloading
+    wget -q --show-progress --progress=bar:force "$kernel_url" -O "$LATEST_KERNEL_TARBALL"
+
+    # Check if download succeeded
+    if [ ! -f "$LATEST_KERNEL_TARBALL" ]; then
         print_green "Failed to download kernel source from $kernel_url. Exiting."
         exit 1
     fi
 
-    if ! tar -xf "$LATEST_KERNEL_TARBALL"; then
-        print_green "Failed to extract kernel source. Exiting."
-        exit 1
-    fi
-
+    tar -xf "$LATEST_KERNEL_TARBALL" || { print_green "Failed to extract kernel source. Exiting."; exit 1; }
     cd "linux-${LATEST_KERNEL_VERSION}" || { print_green "Failed to change directory to linux-${LATEST_KERNEL_VERSION}. Exiting."; exit 1; }
 }
 
@@ -85,6 +85,7 @@ extract_and_update_config() {
         print_green "Failed to extract kernel configuration. Exiting."
         exit 1
     fi
+
     print_green "Kernel configuration extracted successfully!"
 }
 
@@ -117,36 +118,57 @@ compile_kernel() {
         print_green "Kernel compilation failed. Exiting."
         exit 1
     fi
-
     print_green "Kernel compiled successfully!"
 }
 
-# Function to install the kernel and update the bootloader
-install_kernel() {
-    print_green "Installing the kernel..."
+# Function to install the modules
+install_modules() {
+    print_green "Installing kernel modules..."
+    if ! sudo make modules; then
+        print_green "Failed to build kernel modules. Exiting."
+        exit 1
+    fi
 
     if ! sudo make modules_install; then
         print_green "Failed to install kernel modules. Exiting."
         exit 1
     fi
+    print_green "Kernel modules installed successfully!"
+}
 
+# Function to copy the kernel to /boot
+install_kernel() {
+    print_green "Installing the kernel..."
     if ! sudo make install; then
         print_green "Kernel installation failed. Exiting."
         exit 1
     fi
 
-    print_green "Kernel installed successfully! Updating GRUB bootloader..."
+    # Copy and rename the kernel image
+    local kernel_image="arch/x86/boot/bzImage"
+    local destination_image="/boot/vmlinuz-linux${LATEST_KERNEL_VERSION}"
 
-    # Update GRUB or bootloader
-    if command -v update-grub >/dev/null; then
-        sudo update-grub
-    elif command -v grub2-mkconfig >/dev/null; then
-        sudo grub2-mkconfig -o /boot/grub2/grub.cfg
-    else
-        print_green "GRUB bootloader not found. You may need to update the bootloader manually."
-    fi
+    sudo cp -v "$kernel_image" "$destination_image"
 
-    print_green "Kernel installed successfully! Reboot your system to use the new kernel."
+    print_green "Kernel installed and copied to /boot as $(print_red_bold "vmlinuz-linux${LATEST_KERNEL_VERSION}")"
+}
+
+# Function to update GRUB and set the new kernel as default
+update_grub_and_set_default() {
+    print_green "Updating GRUB configuration..."
+
+    # Update the GRUB configuration file
+    sudo grub-mkconfig -o /boot/grub/grub.cfg
+
+    # Manually set GRUB_DEFAULT to the new kernel version in /etc/default/grub
+    print_green "Setting the new kernel as the default in GRUB..."
+
+    local kernel_entry="Advanced options for Arch Linux>Arch Linux, with Linux ${LATEST_KERNEL_VERSION}"
+
+    # Use sed to update GRUB_DEFAULT in /etc/default/grub
+    sudo sed -i "s/^GRUB_DEFAULT=.*/GRUB_DEFAULT=\"${kernel_entry}\"/" /etc/default/grub
+
+    print_green "New kernel set as default. You may need to reboot for changes to take effect."
 }
 
 # Function to clean up temporary files
@@ -165,9 +187,10 @@ check_existing_kernel
 download_kernel
 extract_and_update_config
 compile_kernel
+install_modules
 install_kernel
+update_grub_and_set_default
 cleanup
 
 # Final message
-clear
 print_green "Kernel build and installation completed!"
