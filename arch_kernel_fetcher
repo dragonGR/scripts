@@ -10,12 +10,12 @@ clear
 set -e
 
 # Function to print messages in bright green
-function print_green {
+print_green() {
     echo -e "${BOLD_BRIGHT_GREEN}[$(date +'%Y-%m-%d %H:%M:%S')] $1${RESET}"
 }
 
 # Function to print kernel version in bright red bold
-function print_red_bold {
+print_red_bold() {
     echo -e "${BOLD_BRIGHT_RED}$1${RESET}"
 }
 
@@ -60,7 +60,7 @@ check_existing_kernel() {
 download_kernel() {
     print_green "Downloading Linux Kernel $LATEST_KERNEL_VERSION..."
     mkdir -p "$KERNEL_DIR"
-    cd "$KERNEL_DIR"
+    cd "$KERNEL_DIR" || { print_green "Failed to change directory to $KERNEL_DIR. Exiting."; exit 1; }
 
     local kernel_url="$KERNEL_BASE_URL/v${MAJOR_VERSION}.x/${LATEST_KERNEL_TARBALL}"
 
@@ -74,24 +74,13 @@ download_kernel() {
         exit 1
     fi
 
-    cd linux-"$LATEST_KERNEL_VERSION"
+    cd "linux-${LATEST_KERNEL_VERSION}" || { print_green "Failed to change directory to linux-${LATEST_KERNEL_VERSION}. Exiting."; exit 1; }
 }
 
 # Function to extract and update the current kernel configuration
 extract_and_update_config() {
     print_green "Extracting current kernel configuration..."
 
-    # Extract the current config from the running kernel
-    if ! zcat /proc/config.gz > .config; then
-        print_green "Failed to extract kernel configuration. Exiting."
-        exit 1
-    fi
-    print_green "Kernel configuration extracted successfully!"
-}
-
-# Function to extract the current kernel configuration
-extract_config() {
-    print_green "Extracting current kernel configuration..."
     if ! zcat /proc/config.gz > .config; then
         print_green "Failed to extract kernel configuration. Exiting."
         exit 1
