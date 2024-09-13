@@ -1,24 +1,24 @@
 #!/bin/bash
 
-# Define color variables for bright green and reset
+# Define color variables for bright green, bright red, and reset
 BOLD_BRIGHT_GREEN="\e[1;92m"
 BOLD_BRIGHT_RED="\e[1;91m"
 RESET="\e[0m"
 
 # Function to print messages in bright green
-function print_green {
+print_green() {
     echo -e "${BOLD_BRIGHT_GREEN}$1${RESET}"
 }
 
 # Function to print error messages in bright red
-function print_error {
+print_error() {
     echo -e "${BOLD_BRIGHT_RED}$1${RESET}"
 }
 
 # Define kernel build settings
 export ARCH="arm64"
 export SUBARCH="$ARCH"
-KERNEL_DIR="/path/to/kernel"  # Replace with actual kernel path
+KERNEL_DIR="/path/to/kernel"
 OUT_DIR="${KERNEL_DIR}/out"
 DEFCONFIG="defconfig"
 
@@ -31,7 +31,7 @@ CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
 export PATH="${CLANG_PATH}:${PATH}"
 
 # Function to handle cleanup on exit
-function cleanup {
+cleanup() {
     print_error "Aborting..."
     rm -rf "$OUT_DIR"
     exit 1
@@ -44,14 +44,14 @@ trap cleanup SIGINT SIGTERM
 print_green "Starting Tequila Kernel compilation..."
 
 # Check if kernel directory exists and enter it
-if [[ -d "$KERNEL_DIR" ]]; then
-    cd "$KERNEL_DIR" || { print_error "Failed to enter kernel directory: $KERNEL_DIR"; exit 1; }
-else
+if [[ ! -d "$KERNEL_DIR" ]]; then
     print_error "The specified kernel directory \"$KERNEL_DIR\" does not exist. Please check the path."
     exit 1
 fi
 
-# Clean previous builds (optional)
+cd "$KERNEL_DIR" || { print_error "Failed to enter kernel directory: $KERNEL_DIR"; exit 1; }
+
+# Clean previous builds
 print_green "Cleaning previous builds..."
 make mrproper || { print_error "Failed to clean previous builds. Exiting..."; exit 1; }
 
@@ -61,7 +61,7 @@ make O="$OUT_DIR" ARCH="$ARCH" "$DEFCONFIG" || { print_error "Failed to load def
 
 # Start kernel compilation with Neutron Clang toolchain
 print_green "Starting compilation with Neutron Clang..."
-make -j$(nproc) O="$OUT_DIR" \
+make -j"$(nproc)" O="$OUT_DIR" \
     ARCH="$ARCH" \
     CC=clang \
     CROSS_COMPILE="$CROSS_COMPILE" \
