@@ -90,11 +90,34 @@ extract_and_update_config() {
 
 # Function to compile the kernel
 compile_kernel() {
+    print_green "Preparing to compile the kernel..."
+
+    # Set architecture to x86_64
+    export ARCH=x86_64
+
+    # Copy the existing configuration
+    if [ ! -f .config ]; then
+        print_green "No existing configuration found. Using default configuration."
+        if ! make defconfig; then
+            print_green "Failed to create default configuration. Exiting."
+            exit 1
+        fi
+    fi
+
+    # Update the configuration to reflect new kernel options
+    print_green "Updating kernel configuration..."
+    if ! make olddefconfig; then
+        print_green "Failed to update kernel configuration. Exiting."
+        exit 1
+    fi
+
+    # Compile the kernel
     print_green "Compiling the kernel..."
     if ! make -j"$(nproc)"; then
         print_green "Kernel compilation failed. Exiting."
         exit 1
     fi
+
     print_green "Kernel compiled successfully!"
 }
 
