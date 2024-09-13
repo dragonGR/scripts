@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Define color variables for bright green and reset
+# Define color variables for bright green, bright yellow, and reset
 BOLD_BRIGHT_GREEN="\e[1;92m"
+BOLD_BRIGHT_YELLOW="\e[1;93m"
 RESET="\e[0m"
 
 # Clear the terminal
@@ -10,6 +11,11 @@ clear
 # Function to print messages in bright green
 function print_green {
     echo -e "${BOLD_BRIGHT_GREEN}$1${RESET}"
+}
+
+# Function to print messages in bright yellow
+function print_yellow {
+    echo -e "${BOLD_BRIGHT_YELLOW}$1${RESET}"
 }
 
 # Path to .zshrc
@@ -41,69 +47,91 @@ EXPORTS=(
     "export CCACHE_EXEC=/usr/bin/ccache"
 )
 
+# Function to check if an entry already exists in .zshrc
+function entry_exists {
+    local entry=$1
+    grep -Fxq "$entry" "$ZSHRC_PATH" 2>/dev/null
+}
+
+# Function to determine if any entries need to be added
+function check_entries_to_add {
+    local entries_to_add=()
+
+    # Read the existing .zshrc entries into an array
+    local existing_entries
+    if [ -f "$ZSHRC_PATH" ]; then
+        existing_entries=$(cat "$ZSHRC_PATH")
+    fi
+
+    # Check which aliases and exports need to be added
+    for alias in "${ALIASES[@]}"; do
+        if ! echo "$existing_entries" | grep -Fxq "$alias"; then
+            entries_to_add+=("$alias")
+        fi
+    done
+
+    for export in "${EXPORTS[@]}"; do
+        if ! echo "$existing_entries" | grep -Fxq "$export"; then
+            entries_to_add+=("$export")
+        fi
+    done
+
+    echo "${entries_to_add[@]}"
+}
+
 # Function to backup .zshrc
 function backup_zshrc {
     if [ -f "$ZSHRC_PATH" ]; then
         print_green "Backing up existing .zshrc to .zshrc.bak..."
         cp "$ZSHRC_PATH" "$BACKUP_PATH" || { echo "Failed to backup .zshrc."; exit 1; }
+    else
+        print_green "No existing .zshrc file found. Creating a new one."
     fi
-}
-
-# Function to check if an entry already exists
-function entry_exists {
-    local entry=$1
-    grep -Fxq "$entry" "$ZSHRC_PATH"
 }
 
 # Function to add aliases and exports to .zshrc
 function add_entries {
-    # Backup existing .zshrc
-    backup_zshrc
+    local entries_to_add=("$@")
 
-    # Check if all aliases and exports already exist
-    all_exists=true
+    # Add custom aliases and exports
+    {
+        echo "# Personal Aliases"
+        for alias in "${ALIASES[@]}"; do
+            if [[ " ${entries_to_add[@]} " =~ " $alias " ]]; then
+                echo "$alias"
+            fi
+        done
 
-    for alias in "${ALIASES[@]}"; do
-        if ! entry_exists "$alias"; then
-            all_exists=false
-            break
-        fi
-    done
+        echo "# Personal Exports"
+        for export in "${EXPORTS[@]}"; do
+            if [[ " ${entries_to_add[@]} " =~ " $export " ]]; then
+                echo "$export"
+            fi
+        done
 
-    for export in "${EXPORTS[@]}"; do
-        if ! entry_exists "$export"; then
-            all_exists=false
-            break
-        fi
-    done
+        echo "" # Add a newline at the end
+    } >> "$ZSHRC_PATH"
 
-    if $all_exists; then
-        print_green "Aliases and exports already appended to .zshrc."
-        return
+    # Check if the entries were successfully added
+    if [ $? -eq 0 ]; then
+        print_green "Aliases and exports added successfully!"
+    else
+        echo "Failed to add aliases and exports."
+        exit 1
     fi
-
-    # Add custom aliases
-    echo "# Personal Aliases" >> "$ZSHRC_PATH"
-    for alias in "${ALIASES[@]}"; do
-        if ! entry_exists "$alias"; then
-            echo "$alias" >> "$ZSHRC_PATH"
-        fi
-    done
-
-    # Add custom exports
-    echo "# Personal exports" >> "$ZSHRC_PATH"
-    for export in "${EXPORTS[@]}"; do
-        if ! entry_exists "$export"; then
-            echo "$export" >> "$ZSHRC_PATH"
-        fi
-    done
-
-    echo "" >> "$ZSHRC_PATH"
 }
 
-# Add aliases and exports to .zshrc
-print_green "Adding custom aliases and exports to .zshrc..."
-add_entries && print_green "Aliases and exports added successfully!" || { echo "Failed to add aliases and exports."; exit 1; }
+# Check if any entries need to be added
+entries_to_add=($(check_entries_to_add))
 
-# Inform the user to restart zsh
-print_green "Please restart your Zsh session or open a new terminal to apply the changes."
+if [ ${#entries_to_add[@]} -eq 0 ]; then
+    print_yellow "All aliases and exports are already present in .zshrc."
+else
+    # Add aliases and exports to .zshrc
+    print_green "Adding custom aliases and exports to .zshrc..."
+    backup_zshrc
+    add_entries "${entries_to_add[@]}"
+
+    # Inform the user to restart zsh
+    print_green "Please restart your Zsh session or open a new terminal to apply the changes."
+fi
