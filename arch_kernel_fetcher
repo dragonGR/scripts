@@ -157,8 +157,22 @@ install_kernel() {
 update_grub_and_set_default() {
     print_green "Updating GRUB configuration..."
 
-    # Update the GRUB configuration file
-    sudo grub-mkconfig -o /boot/grub/grub.cfg
+    # Capture the output of grub-mkconfig
+    local grub_output
+    grub_output=$(sudo grub-mkconfig -o /boot/grub/grub.cfg 2>&1)
+
+    # Parse and beautify the output
+    while IFS= read -r line; do
+        if [[ $line == *"Found linux image:"* ]]; then
+            echo -e "${BOLD_BRIGHT_GREEN}[FOUND]${RESET} $line"
+        elif [[ $line == *"Warning:"* ]]; then
+            echo -e "${BOLD_BRIGHT_RED}[WARNING]${RESET} $line"
+        elif [[ $line == *"Adding boot menu entry"* ]]; then
+            echo -e "${BOLD_BRIGHT_GREEN}[INFO]${RESET} $line"
+        else
+            echo -e "${BOLD_BRIGHT_GREEN}[INFO]${RESET} $line"
+        fi
+    done <<< "$grub_output"
 
     # Manually set GRUB_DEFAULT to the new kernel version in /etc/default/grub
     print_green "Setting the new kernel as the default in GRUB..."
