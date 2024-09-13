@@ -2,6 +2,7 @@
 
 # Define color variables for bright green and reset
 BOLD_BRIGHT_GREEN="\e[1;92m"
+BOLD_BRIGHT_RED="\e[1;91m"
 RESET="\e[0m"
 
 # Function to print messages in bright green
@@ -9,9 +10,9 @@ function print_green {
     echo -e "${BOLD_BRIGHT_GREEN}$1${RESET}"
 }
 
-# Function to print error messages
+# Function to print error messages in bright red
 function print_error {
-    echo -e "\e[1;91m$1\e[0m"  # Bright red color for errors
+    echo -e "${BOLD_BRIGHT_RED}$1${RESET}"
 }
 
 # Define kernel build settings
@@ -29,6 +30,16 @@ CROSS_COMPILE_ARM32="arm-linux-gnueabi-"
 # Add Neutron Clang toolchain to PATH
 export PATH="${CLANG_PATH}:${PATH}"
 
+# Function to handle cleanup on exit
+function cleanup {
+    print_error "Aborting..."
+    rm -rf "$OUT_DIR"
+    exit 1
+}
+
+# Set up trap to handle interruptions
+trap cleanup SIGINT SIGTERM
+
 # Log the build process start
 print_green "Starting Tequila Kernel compilation..."
 
@@ -41,9 +52,11 @@ else
 fi
 
 # Clean previous builds (optional)
+print_green "Cleaning previous builds..."
 make mrproper || { print_error "Failed to clean previous builds. Exiting..."; exit 1; }
 
 # Load default configuration
+print_green "Loading defconfig..."
 make O="$OUT_DIR" ARCH="$ARCH" "$DEFCONFIG" || { print_error "Failed to load defconfig. Exiting..."; exit 1; }
 
 # Start kernel compilation with Neutron Clang toolchain
@@ -53,9 +66,6 @@ make -j$(nproc) O="$OUT_DIR" \
     CC=clang \
     CROSS_COMPILE="$CROSS_COMPILE" \
     CROSS_COMPILE_ARM32="$CROSS_COMPILE_ARM32" || { print_error "Kernel compilation failed!"; exit 1; }
-
-# Handle interruption gracefully (e.g., Ctrl+C)
-trap 'print_error "Aborting..."; rm -rf "$OUT_DIR"; exit 1' SIGINT
 
 # Final message
 print_green "Tequila Kernel compilation complete!"
