@@ -5,8 +5,9 @@ BOLD_BRIGHT_GREEN="\e[1;92m"
 BOLD_BRIGHT_RED="\e[1;91m"
 RESET="\e[0m"
 
-# Clear the terminal
+# Clear the terminal and enable immediate script exit on errors
 clear
+set -e
 
 # Function to print messages in bright green
 function print_green {
@@ -21,37 +22,36 @@ function print_red_bold {
 # Variables
 KERNEL_DIR="$HOME/kernel_build"
 KERNEL_BASE_URL="https://cdn.kernel.org/pub/linux/kernel"
-CURRENT_KERNEL_VERSION=$(uname -r | cut -d '-' -f1) # Extract major.minor version
-MAJOR_VERSION=$(echo $CURRENT_KERNEL_VERSION | cut -d '.' -f1) # Major version (e.g., 6)
-MINOR_VERSION=$(echo $CURRENT_KERNEL_VERSION | cut -d '.' -f2) # Minor version (e.g., 10)
+CURRENT_KERNEL_VERSION=$(uname -r | cut -d '-' -f1)  # Extract major.minor version
+MAJOR_VERSION=$(echo "$CURRENT_KERNEL_VERSION" | cut -d '.' -f1)  # Major version (e.g., 6)
 LATEST_KERNEL_VERSION=""
 LATEST_KERNEL_TARBALL=""
 
 # Function to get the latest kernel version from kernel.org
 get_latest_kernel_version() {
     print_green "Fetching the latest kernel version from cdn.kernel.org..."
-    
-    # Fetch the list of versions
-    VERSION_LIST=$(wget -qO- $KERNEL_BASE_URL/v${MAJOR_VERSION}.x/ | \
-        grep -oP 'linux-\K[0-9]+\.[0-9]+\.[0-9]+' | \
-        sort -V | tail -n 1)
-    
-    if [ -z "$VERSION_LIST" ]; then
+
+    local version_list
+    version_list=$(wget -qO- "$KERNEL_BASE_URL/v${MAJOR_VERSION}.x/" | \
+        grep -oP 'linux-\K[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -n 1)
+
+    if [ -z "$version_list" ]; then
         print_green "Failed to fetch the latest kernel version. Exiting."
         exit 1
     fi
-    
-    LATEST_KERNEL_VERSION=$VERSION_LIST
+
+    LATEST_KERNEL_VERSION=$version_list
     LATEST_KERNEL_TARBALL="linux-${LATEST_KERNEL_VERSION}.tar.xz"
-    
-    print_green "Latest kernel version found: $(print_red_bold $LATEST_KERNEL_VERSION)"
+
+    print_green "Latest kernel version found: $(print_red_bold "$LATEST_KERNEL_VERSION")"
 }
 
 # Function to check if the latest kernel version is already installed
-function check_existing_kernel {
-    CURRENT_KERNEL=$(uname -r | cut -d '-' -f1)
-    if [ "$CURRENT_KERNEL" == "$LATEST_KERNEL_VERSION" ]; then
-        print_green "The most recent kernel version is installed: $(print_red_bold $LATEST_KERNEL_VERSION)"
+check_existing_kernel() {
+    local current_kernel
+    current_kernel=$(uname -r | cut -d '-' -f1)
+    if [ "$current_kernel" == "$LATEST_KERNEL_VERSION" ]; then
+        print_green "The most recent kernel version is installed: $(print_red_bold "$LATEST_KERNEL_VERSION")"
         exit 0
     fi
 }
@@ -60,22 +60,33 @@ function check_existing_kernel {
 download_kernel() {
     print_green "Downloading Linux Kernel $LATEST_KERNEL_VERSION..."
     mkdir -p "$KERNEL_DIR"
-    cd "$KERNEL_DIR" || exit
-    
-    # Construct the URL based on the latest version
-    KERNEL_URL="$KERNEL_BASE_URL/v${MAJOR_VERSION}.x/${LATEST_KERNEL_TARBALL}"
-    
-    if ! wget "$KERNEL_URL"; then
-        print_green "Failed to download kernel source from $KERNEL_URL. Exiting."
+    cd "$KERNEL_DIR"
+
+    local kernel_url="$KERNEL_BASE_URL/v${MAJOR_VERSION}.x/${LATEST_KERNEL_TARBALL}"
+
+    if ! wget "$kernel_url"; then
+        print_green "Failed to download kernel source from $kernel_url. Exiting."
         exit 1
     fi
-    
+
     if ! tar -xf "$LATEST_KERNEL_TARBALL"; then
         print_green "Failed to extract kernel source. Exiting."
         exit 1
     fi
-    
-    cd linux-"$LATEST_KERNEL_VERSION" || exit
+
+    cd linux-"$LATEST_KERNEL_VERSION"
+}
+
+# Function to extract and update the current kernel configuration
+extract_and_update_config() {
+    print_green "Extracting current kernel configuration..."
+
+    # Extract the current config from the running kernel
+    if ! zcat /proc/config.gz > .config; then
+        print_green "Failed to extract kernel configuration. Exiting."
+        exit 1
+    fi
+    print_green "Kernel configuration extracted successfully!"
 }
 
 # Function to extract the current kernel configuration
@@ -91,27 +102,39 @@ extract_config() {
 # Function to compile the kernel
 compile_kernel() {
     print_green "Compiling the kernel..."
-    if ! make -j$(nproc); then
+    if ! make -j"$(nproc)"; then
         print_green "Kernel compilation failed. Exiting."
         exit 1
     fi
     print_green "Kernel compiled successfully!"
 }
 
-# Function to install the kernel
+# Function to install the kernel and update the bootloader
 install_kernel() {
     print_green "Installing the kernel..."
+
     if ! sudo make modules_install; then
         print_green "Failed to install kernel modules. Exiting."
         exit 1
     fi
-    
+
     if ! sudo make install; then
         print_green "Kernel installation failed. Exiting."
         exit 1
     fi
-    
-    print_green "Kernel installed successfully! Don't forget to update your bootloader."
+
+    print_green "Kernel installed successfully! Updating GRUB bootloader..."
+
+    # Update GRUB or bootloader
+    if command -v update-grub >/dev/null; then
+        sudo update-grub
+    elif command -v grub2-mkconfig >/dev/null; then
+        sudo grub2-mkconfig -o /boot/grub2/grub.cfg
+    else
+        print_green "GRUB bootloader not found. You may need to update the bootloader manually."
+    fi
+
+    print_green "Kernel installed successfully! Reboot your system to use the new kernel."
 }
 
 # Function to clean up temporary files
@@ -126,9 +149,9 @@ trap 'print_green "Aborting..."; cleanup; exit 1;' INT TERM
 
 # Automating the process
 get_latest_kernel_version
-check_existing_kernel  # Check if we already have the latest kernel version
+check_existing_kernel
 download_kernel
-extract_config
+extract_and_update_config
 compile_kernel
 install_kernel
 cleanup
