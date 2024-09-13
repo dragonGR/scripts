@@ -109,7 +109,7 @@ else
 fi
 
 # Install AUR packages using yay
-install_yay_packages "aosp-devel lineageos-devel spotify-edge visual-studio-code-bin"
+install_yay_packages "aosp-devel lineageos-devel spotify-edge visual-studio-code-bin modprobed-db"
 
 # Clear terminal and final message
 clear
