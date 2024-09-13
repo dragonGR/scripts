@@ -1,13 +1,10 @@
 #!/bin/bash
 
-# Define color variables for bright green, bold white, and reset
+# Define color variables for bright green, bold white, bold red, and reset
 BOLD_BRIGHT_GREEN="\e[1;92m"
 BOLD_WHITE="\e[1;97m"
-RESET="\e[0m"
 BOLD_RED="\e[1;91m"
-
-# Clear the terminal
-clear
+RESET="\e[0m"
 
 # Function to print messages in bright green
 function print_green {
@@ -24,27 +21,48 @@ function print_red {
     echo -e "${BOLD_RED}$1${RESET}"
 }
 
+# Clear the terminal
+clear
+
+# Function to handle errors
+function handle_error {
+    print_red "An error occurred during cleanup: $1"
+    exit 1
+}
+
 # Clean the package cache
 print_green "Cleaning the package cache..."
-sudo pacman -Scc --noconfirm && print_green "Package cache cleaned!" || { print_red "Failed to clean package cache."; exit 1; }
+sudo pacman -Scc --noconfirm || handle_error "Failed to clean package cache."
 
 # Remove orphaned packages
 print_green "Removing orphaned packages..."
 ORPHANS=$(pacman -Qdtq)
-if [ -z "$ORPHANS" ]; then
-    print_green "No orphaned packages found!"
+if [ -n "$ORPHANS" ]; then
+    sudo pacman -Rns $ORPHANS --noconfirm || handle_error "Failed to remove orphaned packages."
 else
-    sudo pacman -Rns $ORPHANS --noconfirm && print_green "Orphaned packages removed!" || { print_red "Failed to remove orphaned packages."; exit 1; }
+    print_green "No orphaned packages found!"
 fi
 
 # Clear systemd journal logs
 print_green "Clearing systemd journal logs..."
-sudo journalctl --vacuum-size=100M && print_green "Systemd journal logs cleared!" || { print_red "Failed to clear journal logs."; exit 1; }
+sudo journalctl --vacuum-size=100M || handle_error "Failed to clear journal logs."
 
 # Clear user cache
 print_green "Clearing user cache..."
-rm -rf ~/.cache/* && print_green "User cache cleared!" || { print_red "Failed to clear user cache."; exit 1; }
+rm -rf ~/.cache/* || handle_error "Failed to clear user cache."
 
-# Clear terminal and final message
+# Clear temporary files
+print_green "Clearing temporary files..."
+rm -rf /tmp/* || handle_error "Failed to clear temporary files."
+
+# Clear package cache for pacman
+print_green "Clearing pacman cache..."
+sudo pacman -Sc --noconfirm || handle_error "Failed to clear pacman cache."
+
+# Clear systemd journal logs for old logs
+print_green "Removing old systemd journal logs..."
+sudo journalctl --vacuum-time=7d || handle_error "Failed to remove old systemd journal logs."
+
+# Clear the terminal and final message
 clear
 print_green "System cleanup completed successfully!"
