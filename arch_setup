@@ -8,19 +8,22 @@ RESET="\e[0m"
 clear
 
 # Function to print messages in bright green
-function print_green {
+print_green() {
     echo -e "${BOLD_BRIGHT_GREEN}$1${RESET}"
 }
 
 # Function to install packages from pacman
-function install_pacman_packages {
+install_pacman_packages() {
     local packages="$1"
     print_green "Installing pacman packages..."
+    local installed_packages
+    installed_packages=$(pacman -Qq)
+
     for package in $packages; do
-        if pacman -Qq | grep -qw $package; then
+        if echo "$installed_packages" | grep -qw "$package"; then
             print_green "$package is already installed."
         else
-            if sudo pacman --needed -S $package --noconfirm; then
+            if sudo pacman --needed -S "$package" --noconfirm; then
                 print_green "$package installed successfully!"
             else
                 print_green "Failed to install $package."
@@ -30,14 +33,17 @@ function install_pacman_packages {
 }
 
 # Function to install packages from AUR using yay
-function install_yay_packages {
+install_yay_packages() {
     local packages="$1"
     print_green "Installing AUR packages..."
+    local installed_packages
+    installed_packages=$(yay -Qq)
+
     for package in $packages; do
-        if yay -Qq | grep -qw $package; then
+        if echo "$installed_packages" | grep -qw "$package"; then
             print_green "$package is already installed."
         else
-            if yay -S $package --noconfirm; then
+            if yay -S "$package" --noconfirm; then
                 print_green "$package installed successfully!"
             else
                 print_green "Failed to install $package."
@@ -47,11 +53,11 @@ function install_yay_packages {
 }
 
 # Function to set GNOME settings
-function set_gnome_setting {
-    local key=$1
-    local value=$2
+set_gnome_setting() {
+    local key="$1"
+    local value="$2"
     print_green "Setting GNOME key $key to $value..."
-    if gsettings set $key $value; then
+    if gsettings set "$key" "$value"; then
         print_green "GNOME setting $key updated successfully!"
     else
         print_green "Failed to update GNOME setting $key."
@@ -108,3 +114,12 @@ install_yay_packages "aosp-devel lineageos-devel spotify-edge visual-studio-code
 # Clear terminal and final message
 clear
 print_green "All done!"
+
+# Update /etc/pacman.conf to set ParallelDownloads
+print_green "Updating /etc/pacman.conf for ParallelDownloads..."
+if sudo sed -i 's/^#ParallelDownloads = .*/ParallelDownloads = 10/' /etc/pacman.conf; then
+    print_green "ParallelDownloads setting updated successfully!"
+else
+    print_green "Failed to update ParallelDownloads setting."
+    exit 1
+fi
