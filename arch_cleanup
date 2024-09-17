@@ -51,9 +51,17 @@ sudo journalctl --vacuum-size=100M || handle_error "Failed to clear journal logs
 print_green "Clearing user cache..."
 rm -rf ~/.cache/* || handle_error "Failed to clear user cache."
 
-# Clear temporary files
+# Clear temporary files, excluding systemd-private and other protected files
 print_green "Clearing temporary files..."
-rm -rf /tmp/* || handle_error "Failed to clear temporary files."
+find /tmp -mindepth 1 -maxdepth 1 \
+    ! -name 'systemd-private-*' \
+    ! -name '.X11-unix' \
+    ! -name '.ICE-unix' \
+    ! -name '.XIM-unix' \
+    ! -name '.font-unix' \
+    ! -name '*.lock' \
+    ! -name '.X*-lock' \
+    -exec rm -rf {} + || handle_error "Failed to clear temporary files."
 
 # Clear package cache for pacman
 print_green "Clearing pacman cache..."
