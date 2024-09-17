@@ -81,9 +81,17 @@ download_kernel() {
 extract_and_update_config() {
     print_green "Extracting current kernel configuration..."
 
-    if ! zcat /proc/config.gz > .config; then
-        print_green "Failed to extract kernel configuration. Exiting."
-        exit 1
+    if [ -f /proc/config.gz ]; then
+        if ! zcat /proc/config.gz > .config; then
+            print_green "Failed to extract kernel configuration. Exiting."
+            exit 1
+        fi
+    else
+        print_green "/proc/config.gz not found. Using default configuration."
+        if ! make defconfig; then
+            print_green "Failed to create default configuration. Exiting."
+            exit 1
+        fi
     fi
 
     print_green "Kernel configuration extracted successfully!"
@@ -95,15 +103,6 @@ compile_kernel() {
 
     # Set architecture to x86_64
     export ARCH=x86_64
-
-    # Copy the existing configuration
-    if [ ! -f .config ]; then
-        print_green "No existing configuration found. Using default configuration."
-        if ! make defconfig; then
-            print_green "Failed to create default configuration. Exiting."
-            exit 1
-        fi
-    fi
 
     # Update the configuration to reflect new kernel options
     print_green "Updating kernel configuration..."
@@ -173,6 +172,14 @@ update_grub_and_set_default() {
             echo -e "${BOLD_BRIGHT_GREEN}[INFO]${RESET} $line"
         fi
     done <<< "$grub_output"
+
+    # Prompt user for confirmation before changing GRUB configuration
+    print_green "Do you want to set the new kernel as the default in GRUB? (y/N)"
+    read -r user_input
+    if [[ ! "$user_input" =~ ^[Yy]$ ]]; then
+        print_green "Skipping GRUB update. Exiting."
+        exit 0
+    fi
 
     # Manually set GRUB_DEFAULT to the new kernel version in /etc/default/grub
     print_green "Setting the new kernel as the default in GRUB..."
