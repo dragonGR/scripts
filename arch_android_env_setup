@@ -28,7 +28,13 @@ check_success() {
 
 # Function to clean up temporary directories
 cleanup() {
+    print_green "Cleaning up temporary files..."
     rm -rf "$TEMP_DIR"
+}
+
+# Function to check if a package is already installed
+is_installed() {
+    pacman -Q "$1" &> /dev/null
 }
 
 # Start setup
@@ -40,13 +46,21 @@ trap cleanup EXIT
 
 # Ensure essential tools are installed before proceeding
 print_green '[0/4] Checking for essential tools (git, base-devel)...'
-sudo pacman -S --noconfirm --needed git base-devel
-check_success "Failed to install essential tools."
+if ! is_installed "git" || ! is_installed "base-devel"; then
+    sudo pacman -S --noconfirm --needed git base-devel
+    check_success "Failed to install essential tools."
+else
+    print_green "Essential tools are already installed."
+fi
 
 # Uncomment the multilib repo, in case it was commented out
 print_green '[1/4] Enabling multilib repo'
-sudo sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf
-check_success "Failed to enable multilib repo."
+if ! grep -q '^\[multilib\]' /etc/pacman.conf; then
+    sudo sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf
+    check_success "Failed to enable multilib repo."
+else
+    print_green "Multilib repo is already enabled."
+fi
 
 # Sync, update, and prepare system
 print_green '[2/4] Syncing repositories and updating system packages'
@@ -64,28 +78,36 @@ packages=(
 )
 
 for package in "${packages[@]}"; do
-    print_green "Installing $package from AUR..."
+    if ! is_installed "$package"; then
+        print_green "Installing $package from AUR..."
 
-    # Clone and install package
-    if git clone "https://aur.archlinux.org/$package.git" "$TEMP_DIR/$package"; then
-        pushd "$TEMP_DIR/$package" > /dev/null || { print_red "Failed to enter directory $package"; exit 1; }
+        # Clone and install package
+        if git clone "https://aur.archlinux.org/$package.git" "$TEMP_DIR/$package"; then
+            pushd "$TEMP_DIR/$package" > /dev/null || { print_red "Failed to enter directory $package"; exit 1; }
 
-        if makepkg -si --skippgpcheck --noconfirm --needed; then
-            print_green "$package installed successfully!"
+            if makepkg -si --skippgpcheck --noconfirm --needed; then
+                print_green "$package installed successfully!"
+            else
+                print_red "Error installing $package"
+            fi
+
+            popd > /dev/null || exit
         else
-            print_red "Error installing $package"
+            print_red "Error cloning $package"
         fi
-
-        popd > /dev/null || exit
     else
-        print_red "Error cloning $package"
+        print_green "$package is already installed."
     fi
 done
 
 # Install adb and associated udev rules
 print_green '[4/4] Installing adb convenience tools'
-sudo pacman -S --noconfirm --needed android-tools android-udev
-check_success "Failed to install adb and udev tools."
+if ! is_installed "android-tools" || ! is_installed "android-udev"; then
+    sudo pacman -S --noconfirm --needed android-tools android-udev
+    check_success "Failed to install adb and udev tools."
+else
+    print_green "adb and udev tools are already installed."
+fi
 
 # Clear terminal and final message
 clear
