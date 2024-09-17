@@ -1,7 +1,11 @@
 #!/bin/bash
 
-# Define color variables for bright green and reset
+# Enable strict mode to exit on errors, undefined variables, and failed pipelines
+set -euo pipefail
+
+# Define color variables for bright green, red, and reset
 BOLD_BRIGHT_GREEN="\e[1;92m"
+BOLD_BRIGHT_RED="\e[1;91m"
 RESET="\e[0m"
 
 # Clear the terminal
@@ -12,114 +16,114 @@ print_green() {
     echo -e "${BOLD_BRIGHT_GREEN}$1${RESET}"
 }
 
-# Function to install packages from pacman
-install_pacman_packages() {
-    local packages="$1"
-    print_green "Installing pacman packages..."
-    local installed_packages
-    installed_packages=$(pacman -Qq)
-
-    for package in $packages; do
-        if echo "$installed_packages" | grep -qw "$package"; then
-            print_green "$package is already installed."
-        else
-            if sudo pacman --needed -S "$package" --noconfirm; then
-                print_green "$package installed successfully!"
-            else
-                print_green "Failed to install $package."
-            fi
-        fi
-    done
+# Function to print error messages in red
+print_red() {
+    echo -e "${BOLD_BRIGHT_RED}$1${RESET}"
 }
 
-# Function to install packages from AUR using yay
-install_yay_packages() {
-    local packages="$1"
-    print_green "Installing AUR packages..."
-    local installed_packages
-    installed_packages=$(yay -Qq)
-
-    for package in $packages; do
-        if echo "$installed_packages" | grep -qw "$package"; then
-            print_green "$package is already installed."
-        else
-            if yay -S "$package" --noconfirm; then
-                print_green "$package installed successfully!"
-            else
-                print_green "Failed to install $package."
-            fi
-        fi
-    done
-}
-
-# Function to set GNOME settings
-set_gnome_setting() {
-    local key="$1"
-    local value="$2"
-    print_green "Setting GNOME key $key to $value..."
-    if gsettings set "$key" "$value"; then
-        print_green "GNOME setting $key updated successfully!"
-    else
-        print_green "Failed to update GNOME setting $key."
+# Function to check for sudo privileges
+require_sudo() {
+    if ! sudo -v; then
+        print_red "Sudo privileges are required. Exiting..."
         exit 1
     fi
 }
+
+# Unified function to install packages via either pacman or yay (AUR)
+install_packages() {
+    local package_manager="$1"
+    shift
+    local packages="$*"
+
+    print_green "Installing packages using $package_manager..."
+
+    # Get installed packages for pacman or yay
+    if [ "$package_manager" == "pacman" ]; then
+        local installed_packages=$(pacman -Qq)
+    else
+        local installed_packages=$(yay -Qq)
+    fi
+
+    for package in $packages; do
+        if echo "$installed_packages" | grep -qw "$package"; then
+            print_green "$package is already installed."
+        else
+            if sudo $package_manager --needed -S "$package" --noconfirm; then
+                print_green "$package installed successfully!"
+            else
+                print_red "Failed to install $package."
+            fi
+        fi
+    done
+}
+
+# Function to enable nano syntax highlighting
+enable_nano_syntax_highlighting() {
+    print_green "Enabling nano syntax highlighting..."
+    if grep -q '^include ' ~/.nanorc; then
+        print_green "Nano syntax highlighting is already enabled."
+    else
+        if find /usr/share/nano/ -iname "*.nanorc" -exec echo include {} \; >> ~/.nanorc; then
+            print_green "Nano syntax highlighting enabled!"
+        else
+            print_red "Failed to enable nano syntax highlighting."
+        fi
+    fi
+}
+
+# Function to install 'yay' AUR helper if not installed
+install_yay() {
+    if ! command -v yay &> /dev/null; then
+        print_green "Installing 'yay' AUR helper..."
+        sudo pacman --needed -S git base-devel --noconfirm
+        git clone https://aur.archlinux.org/yay.git
+        cd yay
+        makepkg -si --noconfirm
+        cd ..
+        rm -rf yay
+        print_green "'Yay' installed!"
+    else
+        print_green "'Yay' is already installed."
+    fi
+}
+
+# Function to update pacman.conf for ParallelDownloads
+update_pacman_conf() {
+    print_green "Updating /etc/pacman.conf for ParallelDownloads..."
+    if grep -q "^#ParallelDownloads" /etc/pacman.conf; then
+        if sudo sed -i 's/^#ParallelDownloads = .*/ParallelDownloads = 10/' /etc/pacman.conf; then
+            print_green "ParallelDownloads setting updated successfully!"
+        else
+            print_red "Failed to update ParallelDownloads setting."
+            exit 1
+        fi
+    else
+        print_green "ParallelDownloads is already set."
+    fi
+}
+
+# Check for sudo privileges
+require_sudo
 
 # Update the system
 print_green "Updating the system..."
-if sudo pacman -Syu --noconfirm; then
-    print_green "System updated successfully!"
-else
-    print_green "System update failed."
-    exit 1
-fi
+sudo pacman -Syu --noconfirm
 
-# Install basic packages from official repositories
-install_pacman_packages "firefox python-pip poetry telegram-desktop meld git git-lfs wget curl base-devel gnupg gcc clang flex bison ttf-fira-code zip unzip fontconfig libxcrypt-compat ccache gnome-browser-connector dos2unix cpio"
-
-# Alt+Shift language switcher setup
-set_gnome_setting "org.gnome.desktop.wm.keybindings switch-input-source" "['<Shift>Alt_L']"
-set_gnome_setting "org.gnome.desktop.wm.keybindings switch-input-source-backward" "['<Alt>Shift_L']"
-
-# Increase audio volume limit from 100% to 150%
-set_gnome_setting "org.gnome.desktop.sound allow-volume-above-100-percent" 'true'
+# Install basic packages from official repositories using pacman
+install_packages "pacman" "firefox python-pip poetry telegram-desktop meld git git-lfs wget curl base-devel gnupg gcc clang flex bison ttf-fira-code zip unzip fontconfig libxcrypt-compat ccache gnome-browser-connector dos2unix cpio"
 
 # Enable nano syntax highlighting
-print_green "Enabling nano syntax highlighting..."
-if find /usr/share/nano/ -iname "*.nanorc" -exec echo include {} \; >> ~/.nanorc; then
-    print_green "Nano syntax highlighting enabled!"
-else
-    print_green "Failed to enable nano syntax highlighting."
-fi
+enable_nano_syntax_highlighting
 
 # Install 'yay' AUR helper
-print_green "Installing 'yay' AUR helper..."
-if ! command -v yay &> /dev/null; then
-    sudo pacman --needed -S git base-devel --noconfirm
-    if git clone https://aur.archlinux.org/yay.git && cd yay && makepkg -si --noconfirm; then
-        print_green "Yay installed!"
-    else
-        print_green "Yay installation failed."
-        exit 1
-    fi
-    cd ..
-    rm -rf yay
-else
-    print_green "'Yay' is already installed."
-fi
+install_yay
 
 # Install AUR packages using yay
-install_yay_packages "aosp-devel lineageos-devel spotify-edge visual-studio-code-bin modprobed-db pamac-aur"
+install_packages "yay" "aosp-devel lineageos-devel spotify-edge visual-studio-code-bin modprobed-db pamac-aur"
 
-# Clear terminal and final message
+# Update pacman.conf to set ParallelDownloads
+update_pacman_conf
+
+# Clear terminal and print final message
 clear
 print_green "All done!"
-
-# Update /etc/pacman.conf to set ParallelDownloads
-print_green "Updating /etc/pacman.conf for ParallelDownloads..."
-if sudo sed -i 's/^#ParallelDownloads = .*/ParallelDownloads = 10/' /etc/pacman.conf; then
-    print_green "ParallelDownloads setting updated successfully!"
-else
-    print_green "Failed to update ParallelDownloads setting."
-    exit 1
-fi
