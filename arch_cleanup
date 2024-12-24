@@ -7,28 +7,43 @@ BOLD_RED="\e[1;91m"
 RESET="\e[0m"
 
 # Function to print messages in bright green
-function print_green {
+print_green() {
     echo -e "${BOLD_BRIGHT_GREEN}$1${RESET}"
 }
 
 # Function to print messages in bold white
-function print_white {
+print_white() {
     echo -e "${BOLD_WHITE}$1${RESET}"
 }
 
 # Function to print messages in bold red
-function print_red {
+print_red() {
     echo -e "${BOLD_RED}$1${RESET}"
 }
+
+# Function to handle errors
+handle_error() {
+    print_red "An error occurred during cleanup: $1"
+    exit 1
+}
+
+# Function to check if a command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Ensure the script is run with sudo privileges
+if [ "$EUID" -ne 0 ]; then
+    print_red "Please run this script with sudo privileges."
+    exit 1
+fi
 
 # Clear the terminal
 clear
 
-# Function to handle errors
-function handle_error {
-    print_red "An error occurred during cleanup: $1"
-    exit 1
-}
+# Update package databases
+print_green "Updating package databases..."
+sudo pacman -Sy --noconfirm || handle_error "Failed to update package databases."
 
 # Clean the package cache
 print_green "Cleaning the package cache..."
@@ -43,17 +58,21 @@ else
     print_green "No orphaned packages found!"
 fi
 
-# Clear systemd journal logs
+# Clear systemd journal logs and limit their size
 print_green "Clearing systemd journal logs..."
 sudo journalctl --vacuum-size=100M || handle_error "Failed to clear journal logs."
 
+# Clear old systemd journal logs
+print_green "Removing old systemd journal logs..."
+sudo journalctl --vacuum-time=7d || handle_error "Failed to remove old systemd journal logs."
+
 # Clear user cache
 print_green "Clearing user cache..."
-rm -rf ~/.cache/* || handle_error "Failed to clear user cache."
+sudo rm -rf /home/*/.cache/* || handle_error "Failed to clear user cache."
 
 # Clear temporary files, excluding systemd-private and other protected files
 print_green "Clearing temporary files..."
-find /tmp -mindepth 1 -maxdepth 1 \
+sudo find /tmp -mindepth 1 -maxdepth 1 \
     ! -name 'systemd-private-*' \
     ! -name '.X11-unix' \
     ! -name '.ICE-unix' \
@@ -63,14 +82,24 @@ find /tmp -mindepth 1 -maxdepth 1 \
     ! -name '.X*-lock' \
     -exec rm -rf {} + || handle_error "Failed to clear temporary files."
 
+# Optimize and clean up pacman database
+print_green "Optimizing pacman database..."
+sudo pacman-optimize || print_red "Failed to optimize pacman database."
+
+# Check for file system errors (optional)
+print_green "Checking for file system errors..."
+sudo fsck -A -R || print_red "File system check encountered issues."
+
 # Clear package cache for pacman
 print_green "Clearing pacman cache..."
 sudo pacman -Sc --noconfirm || handle_error "Failed to clear pacman cache."
 
-# Clear systemd journal logs for old logs
-print_green "Removing old systemd journal logs..."
-sudo journalctl --vacuum-time=7d || handle_error "Failed to remove old systemd journal logs."
+# Final cleanup for untracked cache and log files
+print_green "Performing final cleanup..."
+sudo rm -rf /var/cache/*
+sudo rm -rf /var/log/journal/* || print_red "Failed to clean additional logs."
 
-# Clear the terminal and final message
+# Clear the terminal and display final message
 clear
 print_green "System cleanup completed successfully!"
+print_white "Remember to reboot if necessary."
