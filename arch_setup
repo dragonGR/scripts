@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Enable strict mode to exit on errors, undefined variables, and failed pipelines
 set -euo pipefail
@@ -23,13 +23,13 @@ print_red() {
 
 # Function to check for sudo privileges
 require_sudo() {
-    if ! sudo -v; then
-        print_red "Sudo privileges are required. Exiting..."
+    if [ "$EUID" -ne 0 ]; then
+        print_red "This script requires sudo privileges. Please run with sudo."
         exit 1
     fi
 }
 
-# Unified function to install packages via either pacman or yay (AUR)
+# Unified function to install packages via pacman or yay (AUR)
 install_packages() {
     local package_manager="$1"
     shift
@@ -37,30 +37,41 @@ install_packages() {
 
     print_green "Installing packages using $package_manager..."
 
-    # Get installed packages for pacman or yay
-    if [ "$package_manager" == "pacman" ]; then
-        local installed_packages=$(pacman -Qq)
-    else
-        local installed_packages=$(yay -Qq)
-    fi
-
-    for package in $packages; do
-        if echo "$installed_packages" | grep -qw "$package"; then
-            print_green "$package is already installed."
-        else
-            if sudo $package_manager --needed -S "$package" --noconfirm; then
-                print_green "$package installed successfully!"
-            else
-                print_red "Failed to install $package."
-            fi
+    if [ "$package_manager" == "yay" ]; then
+        if [ -z "${SUDO_USER:-}" ]; then
+            print_red "SUDO_USER is not set. Make sure to run this script with sudo."
+            exit 1
         fi
-    done
+        for package in $packages; do
+            if sudo -u "$SUDO_USER" yay -Qq "$package" &> /dev/null; then
+                print_green "$package is already installed."
+            else
+                if sudo -u "$SUDO_USER" yay --needed -S "$package" --noconfirm; then
+                    print_green "$package installed successfully!"
+                else
+                    print_red "Failed to install $package. Manual intervention may be required."
+                fi
+            fi
+        done
+    else
+        for package in $packages; do
+            if pacman -Qq "$package" &> /dev/null; then
+                print_green "$package is already installed."
+            else
+                if sudo pacman --needed -S "$package" --noconfirm; then
+                    print_green "$package installed successfully!"
+                else
+                    print_red "Failed to install $package."
+                fi
+            fi
+        done
+    fi
 }
 
 # Function to enable nano syntax highlighting
 enable_nano_syntax_highlighting() {
     print_green "Enabling nano syntax highlighting..."
-    if grep -q '^include ' ~/.nanorc; then
+    if grep -q '^include ' ~/.nanorc 2>/dev/null; then
         print_green "Nano syntax highlighting is already enabled."
     else
         if find /usr/share/nano/ -iname "*.nanorc" -exec echo include {} \; >> ~/.nanorc; then
@@ -76,11 +87,13 @@ install_yay() {
     if ! command -v yay &> /dev/null; then
         print_green "Installing 'yay' AUR helper..."
         sudo pacman --needed -S git base-devel --noconfirm
-        git clone https://aur.archlinux.org/yay.git
-        cd yay
-        makepkg -si --noconfirm
-        cd ..
-        rm -rf yay
+
+        TEMP_DIR=$(mktemp -d)
+        git clone https://aur.archlinux.org/yay.git "$TEMP_DIR/yay"
+        pushd "$TEMP_DIR/yay" > /dev/null
+        sudo -u "$SUDO_USER" makepkg -si --noconfirm
+        popd > /dev/null
+        rm -rf "$TEMP_DIR"
         print_green "'Yay' installed!"
     else
         print_green "'Yay' is already installed."
@@ -102,7 +115,7 @@ update_pacman_conf() {
     fi
 }
 
-# Check for sudo privileges
+# Ensure sudo privileges
 require_sudo
 
 # Update the system
@@ -110,7 +123,7 @@ print_green "Updating the system..."
 sudo pacman -Syu --noconfirm
 
 # Install basic packages from official repositories using pacman
-install_packages "pacman" "firefox python-pip poetry telegram-desktop meld git git-lfs wget curl base-devel gnupg gcc clang flex bison ttf-fira-code zip unzip fontconfig libxcrypt-compat ccache gnome-browser-connector dos2unix cpio"
+install_packages "pacman" "meld git git-lfs wget curl zip unzip gnome-browser-connector noto-fonts-cjk noto-fonts-emoji noto-fonts"
 
 # Enable nano syntax highlighting
 enable_nano_syntax_highlighting
@@ -119,7 +132,7 @@ enable_nano_syntax_highlighting
 install_yay
 
 # Install AUR packages using yay
-install_packages "yay" "aosp-devel lineageos-devel spotify-edge visual-studio-code-bin modprobed-db pamac-aur"
+install_packages "yay" "aosp-devel lineageos-devel spotify-edge visual-studio-code-bin pamac-aur"
 
 # Update pacman.conf to set ParallelDownloads
 update_pacman_conf
