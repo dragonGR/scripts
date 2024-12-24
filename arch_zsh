@@ -1,17 +1,20 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+# Enable strict mode for better error handling
+set -euo pipefail
 
 # Define color variables for bright green and reset
 BOLD_BRIGHT_GREEN="\e[1;92m"
 RESET="\e[0m"
 
 # Function to print messages in bright green
-function print_green {
+print_green() {
     echo -e "${BOLD_BRIGHT_GREEN}$1${RESET}"
 }
 
 # Function to log errors and exit
-function log_error_exit {
-    echo "$1"
+log_error_exit() {
+    echo "$1" >&2
     exit 1
 }
 
@@ -20,10 +23,15 @@ clear
 
 # Check Internet connection
 print_green "Checking Internet connection..."
-if ! ping -c 1 archlinux.org &> /dev/null; then
+if ! ping -c 1 -W 3 archlinux.org &> /dev/null; then
     log_error_exit "No Internet connection detected. Exiting."
 fi
 print_green "Internet connection is active."
+
+# Ensure sudo privileges
+if [ "$EUID" -ne 0 ]; then
+    log_error_exit "This script must be run with sudo privileges. Exiting."
+fi
 
 # Check if Zsh is installed
 if command -v zsh &> /dev/null; then
@@ -53,7 +61,7 @@ else
 
     # Set Zsh as the default shell
     print_green "Setting Zsh as the default shell..."
-    if chsh -s /bin/zsh; then
+    if chsh -s $(which zsh) $USER; then
         print_green "Zsh is now the default shell!"
     else
         log_error_exit "Failed to set Zsh as default shell."
@@ -70,10 +78,14 @@ fi
 
 # Set the Zsh theme in .zshrc
 print_green "Setting default theme in .zshrc..."
-if sed -i 's/ZSH_THEME="robbyrussell"/ZSH_THEME="agnoster"/g' ~/.zshrc; then
-    print_green "Theme set to 'agnoster'!"
+if [ -f "$HOME/.zshrc" ]; then
+    if sed -i 's/^ZSH_THEME=.*/ZSH_THEME="agnoster"/' "$HOME/.zshrc"; then
+        print_green "Theme set to 'agnoster'!"
+    else
+        log_error_exit "Failed to set the theme."
+    fi
 else
-    log_error_exit "Failed to set the theme."
+    log_error_exit "No .zshrc file found. Oh My Zsh may not be installed correctly."
 fi
 
 # Final message
