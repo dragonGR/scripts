@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+
+# Enable strict mode for better error handling
+set -euo pipefail
+
+# Define color variables for bright green, bright yellow, and reset
+BOLD_BRIGHT_GREEN="\e[1;92m"
+BOLD_BRIGHT_YELLOW="\e[1;93m"
+RESET="\e[0m"
+
+# Clear the terminal
+clear
+
+# Function to print messages in bright green
+print_green() {
+    echo -e "${BOLD_BRIGHT_GREEN}$1${RESET}"
+}
+
+# Function to print messages in bright yellow
+print_yellow() {
+    echo -e "${BOLD_BRIGHT_YELLOW}$1${RESET}"
+}
+
+# Paths
+ZSHRC_PATH="$HOME/.zshrc"
+BACKUP_PATH="$HOME/.zshrc.bak"
+
+# Aliases and exports
+ALIASES=(
+    "alias gf='git fetch'"
+    "alias gcp='git cherry-pick'"
+    "alias gcps='gcp --skip'"
+    "alias gcpc='gcp --continue'"
+    "alias gcpa='gcp --abort'"
+    "alias gs='git status'"
+    "alias gl='git log'"
+    "alias glo='gl --oneline'"
+    "alias gp='git push'"
+    "alias grb='git rebase'"
+    "alias gc='git clone'"
+    "alias nano='nano -c'"
+    "alias c='clear'"
+    "alias gpf='gp -f'"
+    "alias grbs='grb --skip'"
+    "alias grba='grb --abort'"
+)
+
+EXPORTS=(
+    "export USE_CCACHE=1"
+    "export CCACHE_EXEC=/usr/bin/ccache"
+)
+
+# Function to backup .zshrc
+backup_zshrc() {
+    if [ -f "$ZSHRC_PATH" ]; then
+        print_green "Backing up existing .zshrc to .zshrc.bak..."
+        cp "$ZSHRC_PATH" "$BACKUP_PATH"
+    else
+        print_yellow "No existing .zshrc file found. A new one will be created."
+    fi
+}
+
+# Function to add aliases and exports to .zshrc
+add_entries() {
+    print_green "Adding aliases and exports to .zshrc..."
+    {
+        echo "# Personal Aliases"
+        for alias in "${ALIASES[@]}"; do
+            echo "$alias"
+        done
+
+        echo "# Personal Exports"
+        for export in "${EXPORTS[@]}"; do
+            echo "$export"
+        done
+        echo ""
+    } >> "$ZSHRC_PATH"
+    print_green "Aliases and exports added successfully!"
+}
+
+# Main logic
+if [ ! -f "$ZSHRC_PATH" ] || [ ! -s "$ZSHRC_PATH" ]; then
+    print_yellow ".zshrc does not exist or is empty. A new file will be created."
+    backup_zshrc
+    add_entries
+else
+    print_green "Checking for missing entries in .zshrc..."
+    backup_zshrc
+
+    missing_entries=()
+    for entry in "${ALIASES[@]}" "${EXPORTS[@]}"; do
+        if ! grep -Fxq "$entry" "$ZSHRC_PATH"; then
+            missing_entries+=("$entry")
+        fi
+    done
+
+    if [ ${#missing_entries[@]} -eq 0 ]; then
+        print_yellow "All aliases and exports are already present in .zshrc."
+    else
+        print_green "Adding missing entries to .zshrc..."
+        for entry in "${missing_entries[@]}"; do
+            echo "$entry" >> "$ZSHRC_PATH"
+        done
+        print_green "Missing entries added successfully!"
+    fi
+fi
+
+# Final message
+print_green "Please restart your terminal or run 'source ~/.zshrc' to apply changes."
