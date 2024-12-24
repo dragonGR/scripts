@@ -1,4 +1,7 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
+# Enable strict mode for better error handling
+set -euo pipefail
 
 # Define color codes
 RED='\033[0;31m'
@@ -7,49 +10,61 @@ YELLOW='\033[1;33m'
 BOLD='\033[1m'
 RESET='\033[0m'
 
-# Function to check for yay/paru installation
-check_aur_helper() {
-    if command -v yay &>/dev/null; then
-        AUR_HELPER="yay"
-    elif command -v paru &>/dev/null; then
-        AUR_HELPER="paru"
-    else
-        echo -e "${BOLD}${RED}Error: Neither yay nor paru is installed. Install one to manage AUR packages.${RESET}"
+# Function to print messages in color
+print_message() {
+    local color="$1"
+    local message="$2"
+    echo -e "${BOLD}${color}${message}${RESET}"
+}
+
+# Function to check for yay installation
+check_yay_installed() {
+    if ! command -v yay &>/dev/null; then
+        print_message "$RED" "Error: 'yay' is not installed. Install it to manage AUR packages."
+        exit 1
+    fi
+}
+
+# Function to check if the script is run with sudo
+check_sudo() {
+    if [ "$EUID" -ne 0 ]; then
+        print_message "$RED" "This script must be run with sudo."
         exit 1
     fi
 }
 
 # Start script
-echo -e "${BOLD}${YELLOW}== System Update Script ==${RESET}"
+check_sudo
+print_message "$YELLOW" "== System Update Script =="
 
 # Update the package list
-echo -e "${BOLD}${GREEN}Updating package list...${RESET}"
+print_message "$GREEN" "Updating package list..."
 if sudo pacman -Syu --noconfirm; then
-    echo -e "${BOLD}${GREEN}Package list updated.${RESET}"
+    print_message "$GREEN" "Package list updated."
 else
-    echo -e "${BOLD}${RED}Failed to update package list.${RESET}"
+    print_message "$RED" "Failed to update package list."
     exit 1
 fi
 
-# Clean up old packages
-echo -e "${BOLD}${YELLOW}Cleaning up old packages...${RESET}"
-if sudo pacman -Rns $(pacman -Qdtq) --noconfirm; then
-    echo -e "${BOLD}${GREEN}Old packages cleaned.${RESET}"
+# Clean up orphaned packages
+print_message "$YELLOW" "Cleaning up orphaned packages..."
+if sudo pacman -Rns $(pacman -Qdtq) --noconfirm 2>/dev/null; then
+    print_message "$GREEN" "Orphaned packages cleaned."
 else
-    echo -e "${BOLD}${RED}No old packages to clean or error during cleanup.${RESET}"
+    print_message "$YELLOW" "No orphaned packages to clean."
 fi
 
-# Check for yay or paru
-check_aur_helper
+# Check for yay installation
+check_yay_installed
 
 # Update the AUR packages
-echo -e "${BOLD}${YELLOW}Updating AUR packages using $AUR_HELPER...${RESET}"
-if $AUR_HELPER -Syu --noconfirm; then
-    echo -e "${BOLD}${GREEN}AUR packages updated.${RESET}"
+print_message "$YELLOW" "Updating AUR packages using yay..."
+if sudo -u "$SUDO_USER" yay -Syu --noconfirm; then
+    print_message "$GREEN" "AUR packages updated."
 else
-    echo -e "${BOLD}${RED}Failed to update AUR packages.${RESET}"
+    print_message "$RED" "Failed to update AUR packages."
     exit 1
 fi
 
 # Final message
-echo -e "${BOLD}${GREEN}System update complete.${RESET}"
+print_message "$GREEN" "System update complete."
