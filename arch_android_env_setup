@@ -37,11 +37,25 @@ is_installed() {
     pacman -Q "$1" &> /dev/null
 }
 
+# Ensure script is run with sudo privileges
+if [ "$EUID" -ne 0 ]; then
+    print_red "Please run this script with sudo privileges."
+    exit 1
+fi
+
 # Start setup
 print_green 'Starting Arch-based Android build setup'
 
-# Create a temporary directory for package builds
-TEMP_DIR=$(mktemp -d)
+# Create a temporary directory for package builds in the user's home directory
+if [ -z "$SUDO_USER" ]; then
+    print_red "SUDO_USER is not set. Please run this script using sudo."
+    exit 1
+fi
+
+USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+TEMP_DIR="$USER_HOME/.aur_builds"
+mkdir -p "$TEMP_DIR"
+chown "$SUDO_USER:$SUDO_USER" "$TEMP_DIR"
 trap cleanup EXIT
 
 # Ensure essential tools are installed before proceeding
@@ -58,16 +72,17 @@ print_green '[1/4] Enabling multilib repo'
 if ! grep -q '^\[multilib\]' /etc/pacman.conf; then
     sudo sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf
     check_success "Failed to enable multilib repo."
+    sudo pacman -Syy || check_success "Failed to sync repositories after enabling multilib."
 else
     print_green "Multilib repo is already enabled."
 fi
 
 # Sync, update, and prepare system
 print_green '[2/4] Syncing repositories and updating system packages'
-sudo pacman -Syyu --noconfirm --needed git git-lfs multilib-devel fontconfig ttf-droid
+sudo pacman -Syu --noconfirm --needed git git-lfs multilib-devel fontconfig ttf-droid
 check_success "Failed to sync repositories and update system."
 
-# Install Android build prerequisites from AUR
+# Install Android build prerequisites from AUR as non-root
 print_green '[3/4] Installing Android build prerequisites'
 packages=(
     "ncurses5-compat-libs"
@@ -81,11 +96,11 @@ for package in "${packages[@]}"; do
     if ! is_installed "$package"; then
         print_green "Installing $package from AUR..."
 
-        # Clone and install package
-        if git clone "https://aur.archlinux.org/$package.git" "$TEMP_DIR/$package"; then
+        # Clone and build package as non-root
+        if sudo -u "$SUDO_USER" git clone "https://aur.archlinux.org/$package.git" "$TEMP_DIR/$package"; then
             pushd "$TEMP_DIR/$package" > /dev/null || { print_red "Failed to enter directory $package"; exit 1; }
 
-            if makepkg -si --skippgpcheck --noconfirm --needed; then
+            if sudo -u "$SUDO_USER" makepkg -si --skippgpcheck --noconfirm --needed; then
                 print_green "$package installed successfully!"
             else
                 print_red "Error installing $package"
@@ -111,4 +126,5 @@ fi
 
 # Clear terminal and final message
 clear
-print_green 'Setup completed, enjoy!'
+print_green 'Setup completed successfully!'
+print_green 'Reboot or log out to ensure all changes take effect.'
